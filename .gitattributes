@@ -6,3 +6,5 @@
 backend/models/* filter=lfs diff=lfs merge=lfs -text
 =======
 >>>>>>> 7655656713e5287550c56a83d08eb7fa34715c19
+backend/models/**/*.pkl filter=lfs diff=lfs merge=lfs -text
+backend/models/**/*.h5 filter=lfs diff=lfs merge=lfs -text

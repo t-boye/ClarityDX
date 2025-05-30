@@ -18,13 +18,13 @@ __pycache__/
 # --------------------------
 # Machine Learning Artifacts
 # --------------------------
-*.pkl
-*.joblib
-*.h5
-*.onnx
+# *.pkl
+# *.joblib
+# *.h5
+# *.onnx
 
 # Trained model storage
-backend/models
+# backend/models/
 
 # --------------------------
 # Datasets

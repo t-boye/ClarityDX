@@ -28,12 +28,15 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 app.register_blueprint(image_bp, url_prefix="/api/image-processing")
 app.register_blueprint(patient_encounter_bp)  # Register patient/encounter routes
 
-# Model Paths (Keep these as they are)
-HEPATITIS_C_MODEL_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\hepatitis_c_model\hepatitis_c_model.keras"
-CKD_MODEL_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_model.pkl"
-CKD_SCALER_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_scaler.pkl"
-CKD_FEATURE_NAMES_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_feature_names.pkl"
-HEART_DISEASE_MODEL_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\heart_disease_model\heart_disease_model.h5"
+# Base model directory (relative to the backend directory)
+BASE_MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
+
+# Model Paths (Use relative paths for cloud deployment like Render)
+HEPATITIS_C_MODEL_PATH = os.path.join(BASE_MODEL_DIR, "hepatitis_c_model", "hepatitis_c_model.keras")
+CKD_MODEL_PATH = os.path.join(BASE_MODEL_DIR, "ckd_model", "ckd_model.pkl")
+CKD_SCALER_PATH = os.path.join(BASE_MODEL_DIR, "ckd_model", "ckd_scaler.pkl")
+CKD_FEATURE_NAMES_PATH = os.path.join(BASE_MODEL_DIR, "ckd_model", "ckd_feature_names.pkl")
+HEART_DISEASE_MODEL_PATH = os.path.join(BASE_MODEL_DIR, "heart_disease_model", "heart_disease_model.h5")
 
 # Configure logging (Keep this as it is)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
