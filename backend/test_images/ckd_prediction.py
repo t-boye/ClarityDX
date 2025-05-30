@@ -9,11 +9,19 @@ from typing import Optional, List  # Import Optional and List
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Define absolute paths to your model files
-# Replace these with the *actual* absolute paths on your system!
-MODEL_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_model.pkl"  # Or .joblib, whichever is correct
-SCALER_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_scaler.pkl"  # Or .joblib
-FEATURE_NAMES_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_feature_names.pkl"
+CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Navigate up to the 'backend' directory, which is the root of your deployable app on Render
+# From 'backend/test_images/' (where this file is) you go up one level ('..') to reach 'backend/'
+BACKEND_ROOT_DIR = os.path.join(CURRENT_FILE_DIR, '..')
+
+# Now, construct the path to the 'models' directory relative to the backend root
+MODELS_DIR = os.path.join(BACKEND_ROOT_DIR, 'models')
+
+# Construct the full paths to your CKD model files
+MODEL_PATH = os.path.join(MODELS_DIR, "ckd_model", "ckd_model.pkl")
+SCALER_PATH = os.path.join(MODELS_DIR, "ckd_model", "ckd_scaler.pkl")
+FEATURE_NAMES_PATH = os.path.join(MODELS_DIR, "ckd_model", "ckd_feature_names.pkl")
 
 # Load the model, scaler, and feature names at application startup
 try:
