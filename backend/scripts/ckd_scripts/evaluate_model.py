@@ -5,16 +5,24 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Load the model and scaler
-model_path = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_model.pkl"
-scaler_path = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_scaler.pkl"
+# Get current directory and construct paths
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.abspath(os.path.join(CURRENT_DIR, '..', '..'))
+MODELS_DIR = os.path.join(BACKEND_DIR, 'models')
+DATASET_DIR = os.path.join(BACKEND_DIR, 'dataset')
 
-model = joblib.load(model_path)
-scaler = joblib.load(scaler_path)
+# Load the model and scaler
+try:
+    model = joblib.load(os.path.join(MODELS_DIR, "ckd_model", "ckd_model.pkl"))
+    scaler = joblib.load(os.path.join(MODELS_DIR, "ckd_model", "ckd_scaler.pkl"))
+except Exception as e:
+    raise FileNotFoundError(f"Failed to load model artifacts: {str(e)}")
 
 # Load dataset for evaluation
-data_path = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\dataset\CKD\CKD_Preprocessed.csv"  # Adjust path if needed
-df = pd.read_csv(data_path)
+try:
+    df = pd.read_csv(os.path.join(DATASET_DIR, "CKD", "CKD_Preprocessed.csv"))
+except Exception as e:
+    raise FileNotFoundError(f"Failed to load dataset: {str(e)}")
 
 # Display basic information about the dataset
 print("Dataset Information:")
@@ -43,10 +51,16 @@ print("\nClass distribution:")
 print(y.value_counts())
 
 # Standardize features using the loaded scaler
-X_scaled = scaler.transform(X)
+try:
+    X_scaled = scaler.transform(X)
+except Exception as e:
+    raise ValueError(f"Feature scaling failed: {str(e)}")
 
 # Make predictions
-y_pred = model.predict(X_scaled)
+try:
+    y_pred = model.predict(X_scaled)
+except Exception as e:
+    raise ValueError(f"Prediction failed: {str(e)}")
 
 # Evaluate model
 accuracy = accuracy_score(y, y_pred)
@@ -57,37 +71,55 @@ print("\nClassification Report:")
 print(classification_report(y, y_pred))
 
 # Plot confusion matrix
-cm = confusion_matrix(y, y_pred)
 plt.figure(figsize=(8, 6))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=possible_targets, yticklabels=possible_targets)
+cm = confusion_matrix(y, y_pred)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=['Negative', 'Positive'], 
+            yticklabels=['Negative', 'Positive'])
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.title('Confusion Matrix')
-plt.show()
+plt.tight_layout()
+plt.savefig('confusion_matrix.png')
+plt.close()
 
 # Plot ROC curve (for binary classification)
-y_prob = model.predict_proba(X_scaled)[:, 1]  # Get probabilities for the positive class
-fpr, tpr, thresholds = roc_curve(y, y_prob)
-roc_auc = auc(fpr, tpr)
+if hasattr(model, "predict_proba"):
+    try:
+        y_prob = model.predict_proba(X_scaled)[:, 1]
+        fpr, tpr, thresholds = roc_curve(y, y_prob)
+        roc_auc = auc(fpr, tpr)
 
-plt.figure(figsize=(8, 6))
-plt.plot(fpr, tpr, color='blue', label='ROC curve (area = %0.2f)' % roc_auc)
-plt.plot([0, 1], [0, 1], color='red', linestyle='--')  # Diagonal line
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver Operating Characteristic')
-plt.legend(loc="lower right")
-plt.show()
+        plt.figure(figsize=(8, 6))
+        plt.plot(fpr, tpr, color='blue', label=f'ROC curve (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc="lower right")
+        plt.tight_layout()
+        plt.savefig('roc_curve.png')
+        plt.close()
+    except Exception as e:
+        print(f"Could not generate ROC curve: {str(e)}")
 
-# Plot feature importance
-feature_names = X.columns
-coefficients = model.coef_[0]
-importance_df = pd.DataFrame({'Feature': feature_names, 'Coefficient': coefficients})
-importance_df = importance_df.sort_values(by='Coefficient', ascending=False)
+# Plot feature importance (if model supports it)
+if hasattr(model, "coef_"):
+    try:
+        feature_names = X.columns
+        coefficients = model.coef_[0]
+        importance_df = pd.DataFrame({'Feature': feature_names, 'Coefficient': coefficients})
+        importance_df = importance_df.sort_values(by='Coefficient', ascending=False)
 
-plt.figure(figsize=(10, 6))
-sns.barplot(x='Coefficient', y='Feature', data=importance_df)
-plt.title('Feature Importance')
-plt.show()
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='Coefficient', y='Feature', data=importance_df)
+        plt.title('Feature Importance')
+        plt.tight_layout()
+        plt.savefig('feature_importance.png')
+        plt.close()
+    except Exception as e:
+        print(f"Could not generate feature importance plot: {str(e)}")
+
+print("\nAll operations completed successfully. Plots saved to current directory.")

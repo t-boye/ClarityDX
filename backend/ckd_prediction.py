@@ -10,11 +10,11 @@ from typing import Optional, List, Dict, Union  # Import Optional and List
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Define absolute paths to your model files
-# Replace these with the *actual* absolute paths on your system!
-MODEL_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_model.pkl"  # Or .joblib, whichever is correct
-SCALER_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_scaler.pkl"  # Or .joblib
-FEATURE_NAMES_PATH = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\ckd_model\ckd_feature_names.pkl"
+# Automatically get the absolute path to the models, relative to this file
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # Adjust as necessary
+MODEL_PATH = os.path.join(BASE_DIR, "models", "ckd_model", "ckd_model.pkl")  # Or .joblib, whichever is correct
+SCALER_PATH = os.path.join(BASE_DIR, "models", "ckd_model", "ckd_scaler.pkl")  # Or .joblib
+FEATURE_NAMES_PATH = os.path.join(BASE_DIR, "models", "ckd_model", "ckd_feature_names.pkl")
 
 # Load the model, scaler, and feature names at application startup
 try:
