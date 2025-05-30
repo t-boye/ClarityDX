@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image, UnidentifiedImageError
 import io
 import logging
+import os  # ✅ Added for path handling
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,8 +13,17 @@ logging.basicConfig(level=logging.INFO)
 # Define Blueprint
 image_bp = Blueprint("image_processing", __name__)
 
-# Load trained model
-model = tf.keras.models.load_model(r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\models\multi_class_malaria_model\multi_class_malaria_model.h5")
+# ✅ Dynamically determine the model path for Render compatibility
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "models", "multi_class_malaria_model", "multi_class_malaria_model.h5")
+
+# ✅ Load the model safely
+try:
+    model = tf.keras.models.load_model(MODEL_PATH)
+    logging.info(f"Model loaded from: {MODEL_PATH}")
+except Exception as e:
+    logging.error(f"Failed to load model from {MODEL_PATH}: {e}")
+    model = None
 
 # Prescription data
 prescriptions = {
@@ -27,6 +37,9 @@ prescriptions = {
 def process_image():
     logging.info("Request received to process image")
     try:
+        if model is None:
+            return jsonify({"error": "Model not loaded. Check logs for details."}), 500
+
         if "image" not in request.files:
             return jsonify({"error": "No image file found"}), 400
 
@@ -47,8 +60,7 @@ def process_image():
         predicted_class = class_labels[predicted_class_index]
         confidence = float(prediction[0][predicted_class_index])
 
-        # Adjusted Logic: Corrected prediction logic and non-blood smear handling
-        threshold = 0.7  # Example confidence threshold. Adjust as needed.
+        threshold = 0.7  # Example confidence threshold
 
         if predicted_class == "NonBloodSmear" or confidence < threshold:
             if predicted_class == "NonBloodSmear":
@@ -60,14 +72,18 @@ def process_image():
         elif predicted_class == "Uninfected":
             result = "No Malaria Detected"
         else:
-            result = "Uncertain" # fallback case
+            result = "Uncertain"
 
         logging.info(f"Prediction: {result}, Probability: {confidence}, Predicted Class: {predicted_class}")
 
-        # Get the prescription based on the result
         prescription = prescriptions.get(result, "Prescription information not available.")
 
-        return jsonify({"diagnosis": result, "probability": confidence, "prescription": prescription, "predicted_class" : predicted_class})
+        return jsonify({
+            "diagnosis": result,
+            "probability": confidence,
+            "prescription": prescription,
+            "predicted_class": predicted_class
+        })
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
