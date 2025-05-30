@@ -1,0 +1,78 @@
+# --------------------------
+# Python Environment
+# --------------------------
+# Ignore Python virtual environment and environment file in backend
+backend/venv/
+backend/.env
+.env
+.env.*
+
+# Bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# --------------------------
+# Machine Learning Artifacts
+# --------------------------
+*.pkl
+*.joblib
+*.h5
+*.onnx
+
+# Trained model storage
+backend/models
+
+# --------------------------
+# Datasets
+# --------------------------
+backend/dataset/
+
+# --------------------------
+# Logs and temporary files
+# --------------------------
+*.log
+*.tmp
+
+# --------------------------
+# System and Editor Files
+# --------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# --------------------------
+# Build/Dist (optional frontend)
+# --------------------------
+build/
+dist/
+.cache/
+node_modules/
+
+# --------------------------
+# Site-packages (just in case)
+# --------------------------
+*/site-packages/
+*/site-packages/tensorflow/
+
+# --------------------------
+# SQLite or Local DBs
+# --------------------------
+*.sqlite3
+*.db
+
+# --------------------------
+# VSCode/IDE Config
+# --------------------------
+.vscode/
+.idea/
+
+# --------------------------
+# Local SQL Dump Files
+# --------------------------
+*.sql
+*.session.sql
