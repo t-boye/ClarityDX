@@ -48,24 +48,33 @@ def get_db_pool() -> psycopg2.pool.SimpleConnectionPool:
             db_host = os.environ.get("DB_HOST")
             db_port = os.environ.get("DB_PORT", "5432")
 
+            # Validate that all necessary environment variables are present
             if not all([db_name, db_user, db_password, db_host]):
-                raise ValueError("Missing database environment variables")
+                raise ValueError("Missing database environment variables: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST are required.")
+
+            # --- ADD THIS LINE FOR SSL ---
+            # ssl_mode = 'require' # Or 'verify-full' if you have proper certs and want stricter verification
 
             pg_pool = psycopg2.pool.SimpleConnectionPool(
                 minconn=1,  # Adjust as needed
-                maxconn=10,  # Adjust as needed
+                maxconn=10, # Adjust as needed
                 dbname=db_name,
                 user=db_user,
                 password=db_password,
                 host=db_host,
-                port=db_port
+                port=db_port,
+                # Add the sslmode parameter here
+                # sslmode=ssl_mode
             )
             logging.info("Database connection pool initialized.")
         except ValueError as e:
-            logging.error(f"Error initializing database pool: {e}")
+            logging.error(f"Configuration Error: {e}")
             raise
         except psycopg2.Error as e:
-            logging.error(f"Error connecting to the database: {e}")
+            logging.error(f"Database Connection Error: {e}")
+            raise
+        except Exception as e:
+            logging.error(f"Unexpected error during database pool initialization: {e}")
             raise
     return pg_pool
 
