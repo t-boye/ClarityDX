@@ -10,6 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure this path is correct relative to this file.
 
 const RecordsPage = () => {
   const [records, setRecords] = useState([]);
@@ -29,7 +31,7 @@ const RecordsPage = () => {
       setError("");
       try {
         const response = await axios.get(
-          `http://127.0.0.1:8000/api/encounters/${selectedEncounterId}/records`
+          `${BASE_API_URL}/encounters/${selectedEncounterId}/records` // <--- UPDATED URL HERE!
         );
         setRecords(response.data);
       } catch (err) {
@@ -68,6 +70,8 @@ const RecordsPage = () => {
       <h1 className="text-3xl font-bold mb-6 text-center">Health Records</h1>
 
       {/* Placeholder for encounter selection */}
+      {/* You'll need to uncomment and implement a way to set `selectedEncounterId`
+          For example, from a dropdown of available encounters or via URL params. */}
       {/* <div className="mb-4">
         <Label htmlFor="encounterId">Select Encounter ID:</Label>
         <Input

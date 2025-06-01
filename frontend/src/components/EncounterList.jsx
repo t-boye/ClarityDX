@@ -8,9 +8,7 @@ import {
   CardDescription,
   Button,
 } from "@/components/ui/card"; // Adjust import path
-
-const API_BASE_URL =
-  "http://127.0.0.1:8000/api/patients/${patientId}/encounters"; // Adjust as needed
+import { BASE_API_URL } from "../utils/apiConfig"; // Ensure this path is correct relative to EncounterList.jsx
 
 function EncounterList() {
   const { patientId } = useParams(); // Get patientId from URL
@@ -23,8 +21,9 @@ function EncounterList() {
       setLoading(true);
       setError(null);
       try {
+        // THIS IS THE CRUCIAL CHANGE: Use BASE_API_URL from environment variables
         const response = await axios.get(
-          `${API_BASE_URL}/patients/${patientId}/encounters`
+          `${BASE_API_URL}/patients/${patientId}/encounters` // Correctly uses the base URL
         );
         if (response.status === 200) {
           setEncounters(response.data);
@@ -43,7 +42,10 @@ function EncounterList() {
       }
     };
 
-    fetchEncounters();
+    // Add a check to only fetch if patientId is valid
+    if (patientId) {
+      fetchEncounters();
+    }
   }, [patientId]); // Fetch encounters when patientId changes
 
   if (loading) {

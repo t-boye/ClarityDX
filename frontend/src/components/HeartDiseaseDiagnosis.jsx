@@ -12,6 +12,9 @@ import Select, {
 import axios from "axios";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Make sure the path '../utils/apiConfig' is correct relative to this file.
+// If this file is in 'src/pages' and apiConfig is in 'src/utils', then '../utils/apiConfig' is likely correct.
 
 export default function HeartDiseaseDiagnosis() {
   const [formData, setFormData] = useState({
@@ -60,8 +63,9 @@ export default function HeartDiseaseDiagnosis() {
         thal: mapThal(formData.thal),
       };
 
+      // THIS IS THE CRUCIAL CHANGE:
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/predict/heart_disease",
+        `${BASE_API_URL}/predict/heart_disease`, // <--- UPDATED URL HERE!
         apiData,
         {
           headers: {
@@ -257,6 +261,7 @@ export default function HeartDiseaseDiagnosis() {
               onValueChange={(value) =>
                 handleChange({ target: { name: "cp", value } })
               }
+              value={formData.cp}
             >
               <SelectTrigger id="cp" className="w-full">
                 {formData.cp}

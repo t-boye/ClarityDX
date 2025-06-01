@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import axios from "axios";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE! Adjust path if needed.
 
 const EncounterForm = ({ patientId, onEncounterCreated }) => {
   const [newEncounterData, setNewEncounterData] = useState({
@@ -24,10 +25,11 @@ const EncounterForm = ({ patientId, onEncounterCreated }) => {
     setLoading(true);
     setError("");
     try {
+      // THIS IS THE LINE THAT CHANGES:
       const response = await axios.post(
-        `http://127.0.0.1:8000/api/patients/${patientId}/encounters`,
+        `${BASE_API_URL}/patients/${patientId}/encounters`, // <--- UPDATED URL HERE!
         newEncounterData
-      ); // Adjust URL
+      );
       if (response.status === 201) {
         onEncounterCreated(response.data);
         setNewEncounterData({

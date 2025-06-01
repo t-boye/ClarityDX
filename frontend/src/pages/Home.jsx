@@ -22,6 +22,7 @@ import {
 } from "react-icons/fa";
 import { GiHealthNormal } from "react-icons/gi";
 import { MdSick, MdHealthAndSafety } from "react-icons/md";
+import { BASE_API_URL } from "../utils/apiConfig"; // Ensure this path is correct
 
 function Home() {
   const [patients, setPatients] = useState([]);
@@ -36,7 +37,7 @@ function Home() {
       setLoadingPatients(true);
       setErrorPatients(null);
       try {
-        const response = await axios.get("http://127.0.0.1:8000/api/patients");
+        const response = await axios.get(`${BASE_API_URL}/patients`); // Use BASE_API_URL here
         setPatients(response.data);
       } catch (error) {
         console.error("Error fetching patients:", error);
@@ -179,47 +180,6 @@ function Home() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Additional Cards */}
-        {/* <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <FaHeart className="text-red-500" />
-              Health Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="flex items-center gap-2 mb-4">
-              <FaNotesMedical />
-              View and manage patient health records
-            </CardDescription>
-            <Button asChild className="w-full">
-              <Link to="/records" className="flex items-center gap-2">
-                <FaNotesMedical /> View Records
-              </Link>
-            </Button>
-          </CardContent>
-        </Card> */}
-
-        {/* <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <FaProcedures className="text-purple-500" />
-              Medical Procedures
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="flex items-center gap-2 mb-4">
-              <FaListAlt />
-              Access medical procedures and guidelines
-            </CardDescription>
-            <Button asChild className="w-full">
-              <Link to="/procedures" className="flex items-center gap-2">
-                <FaProcedures /> View Procedures
-              </Link>
-            </Button>
-          </CardContent>
-        </Card> */}
       </div>
 
       {selectedPatientId && (

@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import EncounterForm from "../components/EncounterForm"; // Import the form component
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure the path '../utils/apiConfig' is correct relative to this file.
 
 const Encounters = () => {
   const { patientId } = useParams();
@@ -25,9 +27,10 @@ const Encounters = () => {
       setLoading(true);
       setError(null);
       try {
+        // THIS IS THE CRUCIAL CHANGE:
         const response = await axios.get(
-          `http://127.0.0.1:8000/api/patients/${patientId}/encounters`
-        ); // Adjust URL
+          `${BASE_API_URL}/patients/${patientId}/encounters` // <--- UPDATED URL HERE!
+        );
         setEncounters(response.data);
       } catch (err) {
         setError(`Could not fetch encounters: ${err.message}`);

@@ -24,6 +24,8 @@ import {
 import { GiHealthNormal } from "react-icons/gi";
 import { MdSick, MdHealthAndSafety } from "react-icons/md";
 import { toast } from "react-toastify"; // You'll need to install react-toastify
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure the path '../utils/apiConfig' is correct relative to this file.
 
 const PatientDetails = () => {
   const { patientId } = useParams();
@@ -39,7 +41,7 @@ const PatientDetails = () => {
       setError(null);
       try {
         const response = await axios.get(
-          `http://127.0.0.1:8000/api/patients/${patientId}` // Adjust URL
+          `${BASE_API_URL}/patients/${patientId}` // <--- UPDATED URL HERE!
         );
         if (response.status === 200) {
           setPatient(response.data);
@@ -65,7 +67,7 @@ const PatientDetails = () => {
     setCreatingEncounter(true);
     try {
       const response = await axios.post(
-        `http://127.0.0.1:8000/api/patients/${patientId}/encounters`,
+        `${BASE_API_URL}/patients/${patientId}/encounters`, // <--- UPDATED URL HERE!
         {
           encounter_date: new Date().toISOString().split("T")[0], // YYYY-MM-DD
           encounter_type: "diagnosis", // Or whatever type you need
@@ -102,7 +104,7 @@ const PatientDetails = () => {
       </div>
     );
 
-  if (!patient) return <div>Patient not found.</div>;
+  if (!patient) return <div>No patient found.</div>;
 
   return (
     <div className="p-6">

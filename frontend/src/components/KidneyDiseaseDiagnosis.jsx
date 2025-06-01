@@ -12,6 +12,7 @@ import Select, {
 import axios from "axios";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
 
 export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
   const [formData, setFormData] = useState({
@@ -117,24 +118,31 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
         "Anemia: yes": formData["Anemia: yes"] === "yes" ? 1 : 0,
       };
 
+      // THIS IS THE CRUCIAL CHANGE:
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/predict/ckd",
+        `${BASE_API_URL}/predict/ckd`, // <--- UPDATED URL HERE!
         apiData,
         {
           headers: { "Content-Type": "application/json" },
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to get diagnosis");
-      }
-
+      // Changed from !response.ok because axios throws an error for non-2xx status codes
+      // and response.ok is not a property of axios responses.
       setResult(response.data);
       if (onDiagnosis) {
         onDiagnosis(response.data);
       }
     } catch (error) {
-      setError(error.message);
+      if (axios.isAxiosError(error)) {
+        // Handle Axios specific errors (e.g., network error, 4xx/5xx responses)
+        setError(error.response?.data?.error || "An error occurred.");
+        console.error("Axios error:", error.response?.data || error.message);
+      } else {
+        // Handle other types of errors
+        setError("Failed to connect to the server.");
+        console.error("Non-Axios error:", error);
+      }
     } finally {
       setLoading(false);
     }

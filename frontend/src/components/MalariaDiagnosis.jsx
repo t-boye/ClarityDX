@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Dialog, DialogPanel } from "@headlessui/react";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure the path '../utils/apiConfig' is correct relative to this file.
 
 const MalariaDiagnosis = () => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -27,8 +29,9 @@ const MalariaDiagnosis = () => {
     formData.append("image", selectedFile);
 
     try {
+      // THIS IS THE CRUCIAL CHANGE:
       const response = await fetch(
-        "http://127.0.0.1:8000/api/image-processing/process-image",
+        `${BASE_API_URL}/image-processing/process-image`, // <--- UPDATED URL HERE!
         {
           method: "POST",
           body: formData,
@@ -106,10 +109,10 @@ const MalariaDiagnosis = () => {
 
           <div className="mt-4 text-sm text-gray-500">
             <p>
-              <strong>Disclaimer:</strong> The information provided here is for
-              educational purposes only and should not be considered a
-              substitute for professional medical advice. Always consult with a
-              qualified healthcare provider for diagnosis and treatment.
+              **Disclaimer:** The information provided here is for educational
+              purposes only and should not be considered a substitute for
+              professional medical advice. Always consult with a qualified
+              healthcare provider for diagnosis and treatment.
             </p>
           </div>
           <div className="mt-6 flex justify-end space-x-4">

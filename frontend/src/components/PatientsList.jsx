@@ -7,8 +7,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card"; // Adjust import path
-
-const API_BASE_URL = "http://127.0.0.1:8000/api/patients"; // Adjust as needed
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure the path '../utils/apiConfig' is correct relative to this file.
 
 function PatientsList({ onPatientClick }) {
   const [patients, setPatients] = useState([]);
@@ -20,7 +20,8 @@ function PatientsList({ onPatientClick }) {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_BASE_URL}/patients`);
+        // THIS IS THE CRUCIAL CHANGE:
+        const response = await axios.get(`${BASE_API_URL}/patients`); // <--- UPDATED URL HERE!
         if (response.status === 200) {
           setPatients(response.data);
         } else {

@@ -12,6 +12,8 @@ import Select, {
 import axios from "axios";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure the path '../utils/apiConfig' is correct relative to this file.
 
 export default function HepatitisCDiagnosis() {
   const [formData, setFormData] = useState({
@@ -89,8 +91,9 @@ export default function HepatitisCDiagnosis() {
     };
 
     try {
+      // THIS IS THE CRUCIAL CHANGE:
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/predict/hepatitis_c",
+        `${BASE_API_URL}/predict/hepatitis_c`, // <--- UPDATED URL HERE!
         backendFormData
       );
       setResult(response.data);

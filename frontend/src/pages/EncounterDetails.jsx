@@ -1,6 +1,8 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure the path '../utils/apiConfig' is correct relative to this file.
 
 const EncounterDetails = () => {
   const { encounterId } = useParams(); // Get the dynamic ID from the URL
@@ -10,7 +12,8 @@ const EncounterDetails = () => {
 
   useEffect(() => {
     axios
-      .get(`http://127.0.0.1:8000/api/encounters/${encounterId}`) // You must have a route like this in Flask
+      // THIS IS THE CRUCIAL CHANGE:
+      .get(`${BASE_API_URL}/encounters/${encounterId}`) // <--- UPDATED URL HERE!
       .then((res) => {
         setEncounter(res.data);
         setLoading(false);

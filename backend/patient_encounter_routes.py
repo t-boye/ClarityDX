@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import date, time, datetime
 import logging
+import random  # <--- ADDED THIS LINE
 from utils.db_utils import (
     get_db_connection,
     put_db_connection,
@@ -164,7 +165,7 @@ def create_new_patient():
             return jsonify({"error": f"Invalid input data: {e.errors()}"}), 400
 
         # Generate unique patient code: e.g., TSys-2345
-        unique_code = f"TSys-{random.randint(1000, 9999)}"
+        unique_code = f"TSys-{random.randint(1000, 9999)}" # 'random' is now defined!
 
         patient_id = create_patient(
             conn=conn,

@@ -3,8 +3,8 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Plus, Filter, Edit, Trash2, ChevronRight } from "lucide-react";
 import { toast } from "sonner"; // Using sonner for toasts (you can use any toast library)
-
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
+// Ensure this path is correct relative to this file.
 
 function PatientSelectionPage() {
   const [patients, setPatients] = useState([]);
@@ -41,7 +41,7 @@ function PatientSelectionPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_BASE_URL}/patients`);
+        const response = await axios.get(`${BASE_API_URL}/patients`); // <--- UPDATED URL HERE!
         if (response.status === 200) {
           setPatients(response.data);
         } else {
@@ -101,7 +101,7 @@ function PatientSelectionPage() {
 
   const handleDeletePatient = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/patients/${patientToDelete}`);
+      await axios.delete(`${BASE_API_URL}/patients/${patientToDelete}`); // <--- UPDATED URL HERE!
       setPatients(
         patients.filter((patient) => patient.patient_id !== patientToDelete)
       );
