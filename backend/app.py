@@ -5,31 +5,80 @@ import os
 import joblib
 import tensorflow as tf
 import pandas as pd
-import psycopg2
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from pydantic import BaseModel, Field, confloat, conint, ValidationError  # Keep these imports
-from typing import Any, List, Dict, Union, Optional  # Correctly import Optional from typing
-from utils.db_utils import get_db_connection, create_encounter, DatabaseError
-from patient_encounter_routes import patient_encounter_bp
+from pydantic import BaseModel, Field, confloat, conint, ValidationError
+from typing import Any, List, Dict, Union, Optional
+from datetime import datetime
 
+# --- NEW: Import db and migrate from your new extensions.py ---
+from extensions import db, migrate
 
+# Load environment variables early
+from dotenv import load_dotenv
+load_dotenv()
 
-# Import the prediction functions from the separate files
+# --- Import your prediction functions (assuming they are in separate files) ---
+# Make sure these functions are defined in their respective files and accept
+# raw_json and other necessary arguments directly.
 from malaria_prediction import predict_malaria
 from ckd_prediction import predict_ckd
 from heart_disease_prediction import predict_heart_disease
 from hepatitis_c_prediction import predict_hepatitis_c
-from routes.image_processing import image_bp
 
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Register the blueprints
+# Configure logging (only once!)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# --- Flask-SQLAlchemy Configuration ---
+# Get database connection details from environment variables
+db_name = os.environ.get("DB_NAME")
+db_user = os.environ.get("DB_USER")
+db_password = os.environ.get("DB_PASSWORD")
+db_host = os.environ.get("DB_HOST")
+db_port = os.environ.get("DB_PORT", "5432") # Default to 5432 if not set
+
+# Basic validation for essential environment variables
+required_env_vars = {
+    "DB_NAME": db_name,
+    "DB_USER": db_user,
+    "DB_PASSWORD": db_password,
+    "DB_HOST": db_host,
+}
+
+for var, value in required_env_vars.items():
+    if value is None:
+        logging.error(f"Environment variable {var} is not set. Please check your .env file or environment configuration.")
+        # You might want to raise an exception or exit here in a production environment
+        # sys.exit(1) # Requires 'import sys'
+
+# Construct the SQLAlchemy database URI
+app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False # Suppress a warning
+
+# --- NEW: Initialize SQLAlchemy and Flask-Migrate with the app ---
+db.init_app(app)
+migrate.init_app(app, db)
+logging.info("Flask-SQLAlchemy and Flask-Migrate initialized.")
+
+# --- Import your models AFTER db is initialized with the app ---
+# This is crucial for Flask-Migrate to detect your models
+from models import Patient, Encounter, Record
+
+from errors import DatabaseError, PatientNotFoundError, EncounterNotFoundError, RecordNotFoundError # <--- ADD THIS LINE
+# --- END Flask-SQLAlchemy Configuration ---
+
+
+# Register the blueprints (ensure patient_encounter_bp is defined in patient_encounter_routes.py)
+from patient_encounter_routes import patient_encounter_bp # Moved import here to ensure db is available
+app.register_blueprint(patient_encounter_bp)
+from routes.image_processing import image_bp
 app.register_blueprint(image_bp, url_prefix="/api/image-processing")
-app.register_blueprint(patient_encounter_bp)  # Register patient/encounter routes
 
 # Base model directory (relative to the backend directory)
 BASE_MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
+
 
 # Model Paths (Use relative paths for cloud deployment like Render)
 HEPATITIS_C_MODEL_PATH = os.path.join(BASE_MODEL_DIR, "hepatitis_c_model", "hepatitis_c_model.keras")
@@ -374,6 +423,9 @@ def predict(disease):
         logging.error(f"Exception details: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/')
+def hello():
+    return "Welcome to the Multi-Disease Diagnosis System API!"
 
 if __name__ == "__main__":
     app.run()
