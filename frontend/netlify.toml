@@ -1,0 +1,11 @@
+# netlify.toml (at the root of your multi-disease-diagnosis-system-v0 repo)
+
+[build]
+base = "frontend/" # <-- Tell Netlify where your frontend project starts
+command = "npm run build"
+publish = "frontend/dist" # Or "frontend/build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
