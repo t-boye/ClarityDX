@@ -3,7 +3,7 @@
 [build]
 base = "frontend/" # <-- Tell Netlify where your frontend project starts
 command = "npm run build"
-publish = "frontend/dist" # Or "frontend/build"
+publish = "dist" 
 
 [[redirects]]
   from = "/*"
