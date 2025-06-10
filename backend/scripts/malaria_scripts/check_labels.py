@@ -1,7 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 from PIL import Image
-import random  # Import the random module
+import random
 
 def verify_labels_from_directories(dataset_path, num_images_per_category=5):
     """
@@ -15,6 +15,9 @@ def verify_labels_from_directories(dataset_path, num_images_per_category=5):
     fig = plt.figure(figsize=(10, 5))
 
     for category in categories:
+        # Define category_path inside the loop
+        category_path = os.path.join(dataset_path, category)
+        
         if not os.path.exists(category_path):
             print(f"Warning: Directory {category_path} does not exist.")
             continue
@@ -40,5 +43,5 @@ def verify_labels_from_directories(dataset_path, num_images_per_category=5):
     plt.show()
 
 # Usage
-dataset_path = r"C:\Users\USER\Documents\GitHub\malaria-expert-system\backend\dataset\malaria\train" # change to your path
+dataset_path = r"C:\Users\USER\Documents\GitHub\Multi-Disease-Diagnosis-System-v0\backend\dataset\malaria\train" # change to your path
 verify_labels_from_directories(dataset_path, num_images_per_category=5)

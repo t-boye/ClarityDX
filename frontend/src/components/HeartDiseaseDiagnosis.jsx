@@ -11,10 +11,13 @@ import Select, {
 } from "@/components/ui/select";
 import axios from "axios";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
-import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
-// Make sure the path '../utils/apiConfig' is correct relative to this file.
-// If this file is in 'src/pages' and apiConfig is in 'src/utils', then '../utils/apiConfig' is likely correct.
+import {
+  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+  HeartPulse,
+} from "lucide-react";
+import { BASE_API_URL } from "../utils/apiConfig";
 
 export default function HeartDiseaseDiagnosis() {
   const [formData, setFormData] = useState({
@@ -63,9 +66,8 @@ export default function HeartDiseaseDiagnosis() {
         thal: mapThal(formData.thal),
       };
 
-      // THIS IS THE CRUCIAL CHANGE:
       const response = await axios.post(
-        `${BASE_API_URL}/predict/heart_disease`, // <--- UPDATED URL HERE!
+        `${BASE_API_URL}/predict/heart_disease`,
         apiData,
         {
           headers: {
@@ -176,10 +178,7 @@ export default function HeartDiseaseDiagnosis() {
   };
 
   const getRiskFactorMessage = (result) => {
-    if (
-      result.interpretation &&
-      result.interpretation.significant_risk_factors
-    ) {
+    if (result.interpretation?.significant_risk_factors) {
       return (
         <div className="bg-white p-4 rounded-lg border shadow-sm mt-4">
           <h4 className="font-medium mb-3">Risk Factor Analysis</h4>
@@ -204,7 +203,7 @@ export default function HeartDiseaseDiagnosis() {
   };
 
   const getDisclaimer = (result) => {
-    if (result.interpretation && result.interpretation.disclaimer) {
+    if (result.interpretation?.disclaimer) {
       return (
         <p className="text-xs italic text-gray-500 mt-4">
           {result.interpretation.disclaimer}
@@ -214,262 +213,384 @@ export default function HeartDiseaseDiagnosis() {
     return null;
   };
 
+  // Group form fields into categories
+  const formFieldGroups = [
+    {
+      title: "Patient Information",
+      fields: [
+        { name: "age", label: "Age (years)", type: "number" },
+        {
+          name: "sex",
+          label: "Sex",
+          type: "select",
+          options: [
+            { value: "Male", label: "Male" },
+            { value: "Female", label: "Female" },
+          ],
+        },
+      ],
+    },
+    {
+      title: "Cardiac Symptoms",
+      fields: [
+        {
+          name: "cp",
+          label: "Chest Pain Type",
+          type: "select",
+          options: [
+            { value: "Typical Angina", label: "Typical Angina" },
+            { value: "Atypical Angina", label: "Atypical Angina" },
+            { value: "Non-anginal Pain", label: "Non-anginal Pain" },
+            { value: "Asymptomatic", label: "Asymptomatic" },
+          ],
+        },
+        {
+          name: "exang",
+          label: "Exercise Induced Angina",
+          type: "select",
+          options: [
+            { value: "No", label: "No" },
+            { value: "Yes", label: "Yes" },
+          ],
+        },
+      ],
+    },
+    {
+      title: "Vital Signs",
+      fields: [
+        { name: "trestbps", label: "Resting BP (mm Hg)", type: "number" },
+        { name: "thalach", label: "Max Heart Rate (bpm)", type: "number" },
+        {
+          name: "oldpeak",
+          label: "ST Depression (mm)",
+          type: "number",
+          step: "0.1",
+        },
+      ],
+    },
+    {
+      title: "Blood Tests",
+      fields: [
+        { name: "chol", label: "Cholesterol (mg/dL)", type: "number" },
+        {
+          name: "fbs",
+          label: "Fasting BS > 120 mg/dL",
+          type: "select",
+          options: [
+            { value: "No", label: "No" },
+            { value: "Yes", label: "Yes" },
+          ],
+        },
+      ],
+    },
+    {
+      title: "ECG & Imaging",
+      fields: [
+        {
+          name: "restecg",
+          label: "Resting ECG",
+          type: "select",
+          options: [
+            { value: "Normal", label: "Normal" },
+            { value: "ST-T Wave Abnormality", label: "ST-T Wave Abnormality" },
+            { value: "Left Ventricular Hypertrophy", label: "LV Hypertrophy" },
+          ],
+        },
+        {
+          name: "slope",
+          label: "ST Segment Slope",
+          type: "select",
+          options: [
+            { value: "Upsloping", label: "Upsloping" },
+            { value: "Flat", label: "Flat" },
+            { value: "Downsloping", label: "Downsloping" },
+          ],
+        },
+        {
+          name: "ca",
+          label: "Major Vessels (fluoroscopy)",
+          type: "select",
+          options: [
+            { value: "0", label: "0" },
+            { value: "1", label: "1" },
+            { value: "2", label: "2" },
+            { value: "3", label: "3" },
+          ],
+        },
+      ],
+    },
+    {
+      title: "Other Factors",
+      fields: [
+        {
+          name: "thal",
+          label: "Thalassemia",
+          type: "select",
+          options: [
+            { value: "Normal", label: "Normal" },
+            { value: "Fixed Defect", label: "Fixed Defect" },
+            { value: "Reversible Defect", label: "Reversible Defect" },
+          ],
+        },
+      ],
+    },
+  ];
+
   return (
-    <div className="max-w-5xl mx-auto p-6 min-h-screen flex flex-col justify-center">
-      <Card className="shadow-lg p-6">
-        <h2 className="text-2xl font-bold mb-4 text-center">
-          Heart Disease Diagnosis
-        </h2>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-red-50 py-8 px-4">
+      {/* Animated background elements */}
+      <div className="fixed inset-0 overflow-hidden -z-10">
+        <div className="absolute top-0 left-0 w-32 h-32 rounded-full bg-blue-200 opacity-20 animate-float1"></div>
+        <div className="absolute top-1/4 right-0 w-48 h-48 rounded-full bg-red-200 opacity-20 animate-float2"></div>
+        <div className="absolute bottom-0 left-1/3 w-40 h-40 rounded-full bg-blue-100 opacity-15 animate-float3"></div>
+      </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6"
-        >
-          <div>
-            <Label htmlFor="age">Age</Label>
-            <Input
-              type="number"
-              id="age"
-              name="age"
-              value={formData.age}
-              onChange={handleChange}
-              required
-            />
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3">
+            <HeartPulse className="h-10 w-10 text-red-500" />
+            <h1 className="text-3xl font-bold text-gray-800">
+              Heart Disease Risk Assessment
+            </h1>
+          </div>
+          <p className="text-gray-600 max-w-2xl mx-auto mt-2">
+            Enter your cardiovascular health metrics to assess your risk for
+            heart disease
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column - Form */}
+          <div className="lg:col-span-2">
+            <Card className="shadow-lg border-0 rounded-xl overflow-hidden">
+              <CardContent className="p-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {formFieldGroups.map((group, groupIndex) => (
+                    <div key={groupIndex} className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-700 border-b pb-2">
+                        {group.title}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {group.fields.map((field) => (
+                          <div key={field.name} className="space-y-2">
+                            <Label
+                              htmlFor={field.name}
+                              className="text-gray-700"
+                            >
+                              {field.label}
+                            </Label>
+                            {field.type === "select" ? (
+                              <Select
+                                onValueChange={(value) =>
+                                  handleChange({
+                                    target: { name: field.name, value },
+                                  })
+                                }
+                                value={formData[field.name]}
+                              >
+                                <SelectTrigger
+                                  id={field.name}
+                                  className="w-full"
+                                >
+                                  <SelectValue
+                                    placeholder={`Select ${field.label}`}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {field.options.map((option) => (
+                                    <SelectItem
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                id={field.name}
+                                name={field.name}
+                                type={field.type}
+                                step={field.step || undefined}
+                                value={formData[field.name]}
+                                onChange={handleChange}
+                                className="w-full"
+                                placeholder={`Enter ${field.label}`}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-6 bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-lg font-medium shadow-md"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center">
+                        <svg
+                          className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Analyzing...
+                      </span>
+                    ) : (
+                      "Assess Heart Disease Risk"
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           </div>
 
-          <div>
-            <Label htmlFor="sex">Sex</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "sex", value } })
-              }
-              value={formData.sex}
-            >
-              <SelectTrigger id="sex" className="w-full">
-                {formData.sex}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Male">Male</SelectItem>
-                <SelectItem value="Female">Female</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Right column - Results */}
+          <div className="space-y-6">
+            <Card className="shadow-lg border-0 rounded-xl h-full">
+              <CardContent className="p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">
+                  Assessment Results
+                </h2>
+
+                {error && (
+                  <Alert variant="destructive" className="mb-6">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {result ? (
+                  <div className="space-y-6">
+                    <div
+                      className={`p-4 rounded-lg border ${
+                        result.error
+                          ? "bg-red-50 border-red-200"
+                          : result.diagnosis
+                              ?.toLowerCase()
+                              .includes("likelihood") ||
+                            result.diagnosis
+                              ?.toLowerCase()
+                              .includes("possible indication")
+                          ? "bg-yellow-50 border-yellow-200"
+                          : "bg-green-50 border-green-200"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {getDiagnosisMessage(result)}
+                      </div>
+                    </div>
+
+                    {getRiskFactorMessage(result)}
+                    {getDisclaimer(result)}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-24 h-24 mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                      <HeartPulse className="h-10 w-10 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">
+                      No results yet
+                    </h3>
+                    <p className="text-gray-500 text-sm max-w-xs">
+                      Submit your cardiovascular information to receive a heart
+                      disease risk assessment.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Heart health tips card */}
+            <Card className="shadow-lg border-0 rounded-xl bg-red-50 border-red-100">
+              <CardContent className="p-6">
+                <h3 className="font-semibold text-red-800 mb-3">
+                  Heart Health Tips
+                </h3>
+                <ul className="space-y-2 text-sm text-red-700">
+                  <li className="flex items-start gap-2">
+                    <span>•</span> Maintain a healthy diet low in saturated fats
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span>•</span> Exercise for at least 30 minutes most days
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span>•</span> Monitor and control blood pressure
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span>•</span> Keep cholesterol levels in check
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span>•</span> Avoid smoking and limit alcohol consumption
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span>•</span> Manage stress through relaxation techniques
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
+        </div>
+      </div>
 
-          <div>
-            <Label htmlFor="cp">Chest Pain Type</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "cp", value } })
-              }
-              value={formData.cp}
-            >
-              <SelectTrigger id="cp" className="w-full">
-                {formData.cp}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Typical Angina">Typical Angina</SelectItem>
-                <SelectItem value="Atypical Angina">Atypical Angina</SelectItem>
-                <SelectItem value="Non-anginal Pain">
-                  Non-anginal Pain
-                </SelectItem>
-                <SelectItem value="Asymptomatic">Asymptomatic</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="trestbps">Resting Blood Pressure</Label>
-            <Input
-              type="number"
-              id="trestbps"
-              name="trestbps"
-              value={formData.trestbps}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="chol">Cholesterol</Label>
-            <Input
-              type="number"
-              id="chol"
-              name="chol"
-              value={formData.chol}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="fbs">Fasting Blood Sugar &gt; 120 mg/dl</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "fbs", value } })
-              }
-            >
-              <SelectTrigger id="fbs" className="w-full">
-                {formData.fbs}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="No">No</SelectItem>
-                <SelectItem value="Yes">Yes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="restecg">Resting ECG</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "restecg", value } })
-              }
-            >
-              <SelectTrigger id="restecg" className="w-full">
-                {formData.restecg}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Normal">Normal</SelectItem>
-                <SelectItem value="ST-T Wave Abnormality">
-                  ST-T Wave Abnormality
-                </SelectItem>
-                <SelectItem value="Left Ventricular Hypertrophy">
-                  Left Ventricular Hypertrophy
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="thalach">Max Heart Rate Achieved</Label>
-            <Input
-              type="number"
-              id="thalach"
-              name="thalach"
-              value={formData.thalach}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="exang">Exercise Induced Angina</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "exang", value } })
-              }
-            >
-              <SelectTrigger id="exang" className="w-full">
-                {formData.exang}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="No">No</SelectItem>
-                <SelectItem value="Yes">Yes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="oldpeak">ST Depression Induced by Exercise</Label>
-            <Input
-              type="number"
-              step="0.1"
-              id="oldpeak"
-              name="oldpeak"
-              value={formData.oldpeak}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="slope">Slope of Peak Exercise ST Segment</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "slope", value } })
-              }
-            >
-              <SelectTrigger id="slope" className="w-full">
-                {formData.slope}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Upsloping">Upsloping</SelectItem>
-                <SelectItem value="Flat">Flat</SelectItem>
-                <SelectItem value="Downsloping">Downsloping</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="ca">
-              Number of Major Vessels Colored by Fluoroscopy
-            </Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "ca", value } })
-              }
-            >
-              <SelectTrigger id="ca" className="w-full">
-                {formData.ca}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">0</SelectItem>
-                <SelectItem value="1">1</SelectItem>
-                <SelectItem value="2">2</SelectItem>
-                <SelectItem value="3">3</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="thal">Thalassemia</Label>
-            <Select
-              onValueChange={(value) =>
-                handleChange({ target: { name: "thal", value } })
-              }
-            >
-              <SelectTrigger id="thal" className="w-full">
-                {formData.thal}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Normal">Normal</SelectItem>
-                <SelectItem value="Fixed Defect">Fixed Defect</SelectItem>
-                <SelectItem value="Reversible Defect">
-                  Reversible Defect
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Full-width button */}
-          <div className="col-span-1 sm:col-span-2 md:col-span-3 flex justify-center">
-            <Button
-              type="submit"
-              disabled={loading}
-              className="bg-blue-500 text-white w-full"
-            >
-              {loading ? "Diagnosing..." : "Diagnose"}
-            </Button>
-          </div>
-        </form>
-
-        {/* Diagnosis Result */}
-        {loading && <p>Loading...</p>}
-
-        {error && (
-          <CardContent className="mt-4 p-4 bg-red-100 rounded">
-            <p className="text-red-500">Error: {error}</p>
-          </CardContent>
-        )}
-
-        {result && !error && (
-          <CardContent className="mt-4 p-4 bg-green-100 rounded">
-            {getDiagnosisMessage(result)}
-            {getRiskFactorMessage(result)}
-            {getDisclaimer(result)}
-          </CardContent>
-        )}
-      </Card>
+      {/* Add CSS for animated floating elements */}
+      <style jsx>{`
+        @keyframes float1 {
+          0%,
+          100% {
+            transform: translate(0, 0) rotate(0deg);
+          }
+          50% {
+            transform: translate(20px, 30px) rotate(5deg);
+          }
+        }
+        @keyframes float2 {
+          0%,
+          100% {
+            transform: translate(0, 0) rotate(0deg);
+          }
+          50% {
+            transform: translate(-30px, 20px) rotate(-5deg);
+          }
+        }
+        @keyframes float3 {
+          0%,
+          100% {
+            transform: translate(0, 0) rotate(0deg);
+          }
+          50% {
+            transform: translate(15px, -20px) rotate(3deg);
+          }
+        }
+        .animate-float1 {
+          animation: float1 10s ease-in-out infinite;
+        }
+        .animate-float2 {
+          animation: float2 12s ease-in-out infinite;
+        }
+        .animate-float3 {
+          animation: float3 14s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
