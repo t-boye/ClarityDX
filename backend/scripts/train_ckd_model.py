@@ -2,23 +2,21 @@ import pandas as pd
 import joblib
 import os
 import matplotlib
-matplotlib.use('Agg') # Set Matplotlib backend BEFORE importing pyplot
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import mutual_info_classif, f_classif # For Mutual Information and ANOVA (f_classif)
+from scipy.stats import chi2_contingency, f_oneway # For Chi-squared, ANOVA (alternative if direct f_classif not enough)
+import numpy as np
 import logging
-
-# Import models
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, auc
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# --- Existing functions (save_confusion_matrix, save_classification_report, save_roc_curve) go here ---
 
 def save_confusion_matrix(conf_matrix, model_name, img_dir):
     """Save the confusion matrix as an image."""
@@ -59,6 +57,7 @@ def save_classification_report(report, model_name, img_dir):
 
 def save_roc_curve(model, X_test_scaled, y_test, model_name, img_dir):
     """Save the ROC curve as an image."""
+    from sklearn.metrics import roc_curve, auc
     if hasattr(model, "predict_proba"):
         y_proba = model.predict_proba(X_test_scaled)[:, 1]
         fpr, tpr, _ = roc_curve(y_test, y_proba)
@@ -80,6 +79,148 @@ def save_roc_curve(model, X_test_scaled, y_test, model_name, img_dir):
         logging.info(f"Saved {model_name} ROC curve to {img_dir}")
     else:
         logging.warning(f"{model_name} does not support predict_proba, skipping ROC curve plot.")
+
+# --- Start of new functions for feature analysis visualizations ---
+
+def calculate_cramers_v(contingency_table):
+    """Calculate Cramer's V for a contingency table."""
+    chi2 = chi2_contingency(contingency_table)[0]
+    n = contingency_table.sum().sum()
+    min_dim = min(contingency_table.shape) - 1
+    # Avoid division by zero if n or min_dim is zero
+    if n * min_dim == 0:
+        return 0.0
+    v = np.sqrt(chi2 / (n * min_dim))
+    return v
+
+def plot_chi2_cramers_v(df, categorical_cols, target_col, img_dir):
+    """Plot Chi-squared p-values and Cramer's V scores for categorical features."""
+    chi2_p_values = {}
+    cramers_v_scores = {}
+
+    for col in categorical_cols:
+        if col != target_col:
+            # Ensure the column is of integer type for proper cross-tabulation
+            # This is important if your categorical data is 0.0/1.0 floats from imputation
+            if pd.api.types.is_float_dtype(df[col]) and df[col].dropna().apply(lambda x: x.is_integer()).all():
+                temp_col = df[col].astype(int)
+            else:
+                temp_col = df[col] # Assume it's already int or handled
+            
+            contingency_table = pd.crosstab(temp_col, df[target_col])
+            
+            # Ensure contingency table is not empty or degenerate
+            if contingency_table.empty or contingency_table.shape[0] < 2 or contingency_table.shape[1] < 2:
+                logging.warning(f"Skipping Chi-squared/Cramer's V for '{col}': Contingency table is too small or degenerate. Shape: {contingency_table.shape}")
+                continue
+
+            try:
+                chi2, p, _, _ = chi2_contingency(contingency_table)
+                chi2_p_values[col] = p
+                cramers_v_scores[col] = calculate_cramers_v(contingency_table)
+            except ValueError as e:
+                logging.warning(f"Could not compute Chi-squared/Cramer's V for '{col}': {e}")
+
+
+    if not chi2_p_values:
+        logging.warning("No Chi-squared p-values computed. Skipping Chi-squared/Cramer's V plots.")
+        return
+
+    # Plot Chi-squared p-values
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=list(chi2_p_values.keys()), y=list(chi2_p_values.values()))
+    plt.axhline(y=0.05, color='r', linestyle='--', label='p=0.05 (Significance Threshold)')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('Chi-squared p-value')
+    plt.title('Chi-squared Test P-values for Categorical Features vs. Target')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, 'chi2_p_values.png'))
+    plt.close()
+    logging.info(f"Saved Chi-squared p-values plot to {img_dir}")
+
+    # Plot Cramer's V scores
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=list(cramers_v_scores.keys()), y=list(cramers_v_scores.values()), palette='viridis')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Cramer's V Score")
+    plt.title("Cramer's V Scores for Categorical Features vs. Target")
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, 'cramers_v_scores.png'))
+    plt.close()
+    logging.info(f"Saved Cramer's V scores plot to {img_dir}")
+
+def plot_mutual_information(X, y, img_dir):
+    """Plot Mutual Information scores for all features."""
+    mi_scores = mutual_info_classif(X, y, random_state=42)
+    mi_series = pd.Series(mi_scores, index=X.columns).sort_values(ascending=False)
+
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=mi_series.index, y=mi_series.values, palette='plasma')
+    plt.xticks(rotation=90, ha='center')
+    plt.ylabel('Mutual Information Score')
+    plt.title('Mutual Information Scores for Features vs. Target')
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, 'mutual_information_scores.png'))
+    plt.close()
+    logging.info(f"Saved Mutual Information scores plot to {img_dir}")
+
+def plot_anova(df, numerical_cols, target_col, img_dir):
+    """Plot ANOVA F-scores and p-values for numerical features."""
+    anova_f_scores = {}
+    anova_p_values = {}
+
+    for col in numerical_cols:
+        if col != target_col:
+            # Group numerical data by target classes (0 and 1)
+            # Dropna for each group to ensure f_oneway doesn't get NaNs
+            groups = [df[col][df[target_col] == cls].dropna() for cls in df[target_col].unique()]
+            
+            # Filter out groups with insufficient data for ANOVA
+            valid_groups = [g for g in groups if len(g) > 1]
+
+            if len(valid_groups) > 1: # Ensure at least two groups with enough data
+                f_stat, p_val = f_oneway(*valid_groups)
+                anova_f_scores[col] = f_stat
+                anova_p_values[col] = p_val
+            else:
+                logging.warning(f"Skipping ANOVA for '{col}': Insufficient valid data or groups for comparison. Groups lengths: {[len(g) for g in groups]}")
+
+    if not anova_f_scores:
+        logging.warning("No ANOVA F-scores computed. Skipping ANOVA plots.")
+        return
+
+    # Plot ANOVA F-scores
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=list(anova_f_scores.keys()), y=list(anova_f_scores.values()), palette='coolwarm')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('ANOVA F-score')
+    plt.title('ANOVA F-scores for Numerical Features vs. Target')
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, 'anova_f_scores.png'))
+    plt.close()
+    logging.info(f"Saved ANOVA F-scores plot to {img_dir}")
+
+    # Plot ANOVA p-values
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=list(anova_p_values.keys()), y=list(anova_p_values.values()))
+    plt.axhline(y=0.05, color='r', linestyle='--', label='p=0.05 (Significance Threshold)')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('ANOVA p-value')
+    plt.title('ANOVA P-values for Numerical Features vs. Target')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, 'anova_p_values.png'))
+    plt.close()
+    logging.info(f"Saved ANOVA p-values plot to {img_dir}")
+
+# --- End of new functions for feature analysis visualizations ---
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, auc
 
 def train_and_evaluate_models(X_train_scaled, y_train, X_test_scaled, y_test, img_dir):
     """Train and evaluate multiple models, returning their results."""
@@ -251,7 +392,6 @@ def main(data_path, model_dir, img_dir):
     logging.info(f"Unique values in target column before cleaning: {df[target_col].unique()}")
 
     # Strip whitespace and convert to lowercase
-    # This also converts initial float values (e.g., 1.0) to string '1.0'
     df[target_col] = df[target_col].astype(str).str.strip().str.lower()
 
     # Replace problematic string representations with NaN
@@ -259,12 +399,11 @@ def main(data_path, model_dir, img_dir):
         '?': pd.NA,
         '': pd.NA,
         ' ': pd.NA,
-        'nan': pd.NA, # This catches the string 'nan' if float NaNs were converted
+        'nan': pd.NA,
         'n/a': pd.NA,
         '-': pd.NA
     })
 
-    # Log unique values after initial replacement (before dropping NaNs)
     logging.info(f"Unique values in target column after replacement: {df[target_col].unique()}")
 
     # Drop rows with NaN values in the target column
@@ -274,14 +413,10 @@ def main(data_path, model_dir, img_dir):
     if initial_rows > rows_after_dropna:
         logging.info(f"Dropped {initial_rows - rows_after_dropna} rows due to NaN values in the target column.")
 
-    # Convert remaining valid string representations ('yes', 'no', '1.0', '0.0') to numerical
+    # Convert remaining valid string representations to numerical
     df[target_col] = df[target_col].replace({'yes': 1, 'no': 0, '1.0': 1, '0.0': 0}).astype(int)
-    # The .astype(int) explicitly converts to integer, handling the FutureWarning
-
-    # Log unique values after final mapping and type conversion
     logging.info(f"Unique values in target column after mapping: {df[target_col].unique()}")
 
-    # Final check for NaN values (should not be any at this point if cleaning was successful)
     if df[target_col].isnull().any():
         logging.error("Target column still contains NaN values after cleaning. Unique values remaining: %s", df[target_col].unique())
         raise ValueError("Target column still contains NaN values.")
@@ -290,17 +425,73 @@ def main(data_path, model_dir, img_dir):
     X = df.drop(columns=[target_col])
     y = df[target_col]
 
-    # Handle missing values in features using imputation
+    # Handle missing values in features using imputation (BEFORE feature analysis for consistency)
     imputer = SimpleImputer(strategy='median')
-    # Ensure X is a DataFrame before imputation to preserve column names
-    X = pd.DataFrame(imputer.fit_transform(X), columns=X.columns)
+    X_imputed = pd.DataFrame(imputer.fit_transform(X), columns=X.columns)
     logging.info("Missing values handled using imputation.")
 
-    # Log unique values in the target variable
+    # --- NEW: Feature Analysis and Plotting ---
+    logging.info("\n--- Performing Feature Analysis ---")
+
+    # Define categorical and numerical columns for analysis
+    # IMPORTANT: These lists are corrected based on your terminal output
+    categorical_features_for_analysis = [
+        'Red Blood Cells: normal',
+        'Pus Cells: normal',
+        'Pus Cell Clumps: present',
+        'Bacteria: present',
+        'Hypertension: yes',
+        'Diabetes Mellitus: yes',
+        'Coronary Artery Disease: yes',
+        'Appetite: poor',
+        'Pedal Edema: yes',
+        'Anemia: yes'
+    ]
+    # Filter to only include columns actually present in X_imputed
+    categorical_features_for_analysis = [col for col in categorical_features_for_analysis if col in X_imputed.columns]
+
+    numerical_features_for_analysis = [
+        'Age (yrs)',
+        'Blood Pressure (mm/Hg)',
+        'Specific Gravity',
+        'Albumin',
+        'Sugar',
+        'Blood Glucose Random (mgs/dL)',
+        'Blood Urea (mgs/dL)',
+        'Serum Creatinine (mgs/dL)',
+        'Sodium (mEq/L)',
+        'Potassium (mEq/L)',
+        'Hemoglobin (gms)',
+        'Packed Cell Volume',
+        'White Blood Cells (cells/cmm)',
+        'Red Blood Cells (millions/cmm)'
+    ]
+    numerical_features_for_analysis = [col for col in numerical_features_for_analysis if col in X_imputed.columns]
+
+
+    # 1. Chi-squared and Cramer's V (for categorical features)
+    if categorical_features_for_analysis:
+        df_combined_cat = pd.concat([X_imputed[categorical_features_for_analysis], y], axis=1)
+        plot_chi2_cramers_v(df_combined_cat, categorical_features_for_analysis, target_col, img_dir)
+    else:
+        logging.warning("No categorical features defined or found for Chi-squared/Cramer's V analysis.")
+
+    # 2. Mutual Information
+    plot_mutual_information(X_imputed, y, img_dir) # Use X_imputed as it should be all numerical now
+
+    # 3. ANOVA (for numerical features)
+    if numerical_features_for_analysis:
+        df_combined_num = pd.concat([X_imputed[numerical_features_for_analysis], y], axis=1)
+        plot_anova(df_combined_num, numerical_features_for_analysis, target_col, img_dir)
+    else:
+        logging.warning("No numerical features defined or found for ANOVA analysis.")
+    # --- END NEW FEATURE ANALYSIS ---
+
     logging.info(f"Unique values in target variable: {y.unique()}")
 
     # Split data into training and testing sets (80% train, 20% test)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    # Use X_imputed here, as this is the preprocessed data for model training
+    X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.2, random_state=42, stratify=y)
     logging.info("Data split into training and testing sets.")
 
     # Standardize features
@@ -330,7 +521,7 @@ def main(data_path, model_dir, img_dir):
     scaler_path = os.path.join(model_dir, "ckd_scaler.pkl")
     feature_names_path = os.path.join(model_dir, "ckd_feature_names.pkl")
     joblib.dump(scaler, scaler_path)
-    joblib.dump(X.columns.tolist(), feature_names_path)
+    joblib.dump(X.columns.tolist(), feature_names_path) # Save original column names
     logging.info(f"Scaler saved to {scaler_path}")
     logging.info(f"Feature names saved to {feature_names_path}")
 
@@ -340,10 +531,8 @@ def main(data_path, model_dir, img_dir):
 
 
 if __name__ == "__main__":
-    # Specify data path, model directory, and image directory
     data_path = r"C:\Users\USER\Documents\GitHub\Multi-Disease-Diagnosis-System-v0\backend\dataset\CKD\CKD_Preprocessed.csv"
     model_dir = r"C:\Users\USER\Documents\GitHub\Multi-Disease-Diagnosis-System-v0\backend\models\ckd_model"
     img_dir = r"C:\Users\USER\Documents\GitHub\Multi-Disease-Diagnosis-System-v0\backend\scripts\ckd_scripts\img"
 
-    # Train and evaluate all models
     main(data_path, model_dir, img_dir)

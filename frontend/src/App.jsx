@@ -16,6 +16,7 @@ import HepatitisCDiagnosis from "./components/HepatitisCDiagnosis"; // Changed t
 import MalariaDiagnosis from "./components/MalariaDiagnosis"; // Changed to page
 import HeartDiseaseDiagnosis from "./components/HeartDiseaseDiagnosis"; // Changed to page
 import KidneyDiseaseDiagnosis from "./components/KidneyDiseaseDiagnosis"; // Changed to page
+
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import DiagnosticTools from "./pages/DiagnosticTools"; // Import the component
 import EncounterDetails from "./pages/EncounterDetails";
@@ -26,6 +27,7 @@ import CreatePatientForm from "./components/CreatePatientForm";
 import PatientDetails from "./pages/PatientDetails"; // New page
 import Encounters from "./pages/Encounters";
 import Reports from "./pages/Reports"; // New page - **Important!**
+import SymScanPredictor from "./components/SymScanPredictor";
 
 // Protected Route Component (Keep this as it is)
 const ProtectedRoute = ({ children }) => {
@@ -59,7 +61,7 @@ const App = () => {
                   </ProtectedRoute>
                 }
               />
-              <Route path="/diseases" element={<DiagnosticTools />} />
+              <Route path="/diagnosis" element={<DiagnosticTools />} />
               <Route
                 path="/about"
                 element={
@@ -73,6 +75,14 @@ const App = () => {
                 element={
                   <ProtectedRoute>
                     <HelpFAQ />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/symscan"
+                element={
+                  <ProtectedRoute>
+                    <SymScanPredictor />
                   </ProtectedRoute>
                 }
               />

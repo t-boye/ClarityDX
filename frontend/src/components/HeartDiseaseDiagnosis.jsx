@@ -19,6 +19,15 @@ import {
 } from "lucide-react";
 import { BASE_API_URL } from "../utils/apiConfig";
 
+// Define physiological ranges for validation
+const PHYSIOLOGICAL_RANGES = {
+  age: { min: 18, max: 120 },
+  trestbps: { min: 70, max: 200 }, // Resting BP (mm Hg)
+  chol: { min: 100, max: 400 }, // Cholesterol (mg/dL)
+  thalach: { min: 60, max: 220 }, // Max Heart Rate (bpm)
+  oldpeak: { min: 0, max: 7 }, // ST Depression (mm)
+};
+
 export default function HeartDiseaseDiagnosis() {
   const [formData, setFormData] = useState({
     age: "",
@@ -39,15 +48,96 @@ export default function HeartDiseaseDiagnosis() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    // Validate numeric fields as user types
+    if (["age", "trestbps", "chol", "thalach", "oldpeak"].includes(name)) {
+      // Allow empty string to clear the input, or valid number/decimal
+      if (value !== "" && !/^\d*\.?\d*$/.test(value)) {
+        return; // Only allow numbers and decimal points
+      }
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear validation error for this field
+    if (validationErrors[name]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleSelectChange = (name, value) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear validation error for this field
+    if (validationErrors[name]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    const numberFields = ["age", "trestbps", "chol", "thalach", "oldpeak"];
+
+    for (const key in formData) {
+      // Check required fields (empty string or null)
+      if (formData[key] === "" || formData[key] === null) {
+        errors[key] = `${
+          formFieldGroups
+            .flatMap((group) => group.fields)
+            .find((field) => field.name === key)?.label || key
+        } is required.`;
+        continue; // Move to the next field if required and empty
+      }
+
+      // Validate number fields for format and physiological ranges
+      if (numberFields.includes(key)) {
+        const numValue = parseFloat(formData[key]);
+
+        if (isNaN(numValue)) {
+          errors[key] = `Must be a valid number`;
+          continue;
+        }
+
+        // oldpeak can be 0, but other fields should not be negative
+        if (numValue < 0 && key !== "oldpeak") {
+          errors[key] = `Cannot be negative`;
+          continue;
+        }
+
+        // Check physiological ranges
+        const range = PHYSIOLOGICAL_RANGES[key];
+        if (range && (numValue < range.min || numValue > range.max)) {
+          errors[key] = `Value must be between ${range.min} and ${range.max}`;
+        }
+      }
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    if (!validateForm()) {
+      setError("Please correct the errors in the form.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const apiData = {
@@ -66,13 +156,19 @@ export default function HeartDiseaseDiagnosis() {
         thal: mapThal(formData.thal),
       };
 
+      // Re-validate all numeric values before sending, especially after parsing
+      for (const [key, value] of Object.entries(apiData)) {
+        if (typeof value === "number" && isNaN(value)) {
+          throw new Error(`Invalid numeric value for ${key} after parsing.`);
+        }
+      }
+
       const response = await axios.post(
         `${BASE_API_URL}/predict/heart_disease`,
         apiData,
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
+          timeout: 10000, // 10 second timeout
         }
       );
 
@@ -82,14 +178,19 @@ export default function HeartDiseaseDiagnosis() {
 
       setResult(response.data);
     } catch (err) {
-      console.error("Error diagnosing Heart Disease", err);
-      setError(err.message || "Failed to get diagnosis. Please try again.");
+      console.error("Heart Disease prediction error:", err);
+      setError(
+        err.response?.data?.details ||
+          err.message ||
+          "Failed to get diagnosis. Please try again."
+      );
       setResult(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // Mapping functions remain the same...
   const mapChestPain = (cp) => {
     switch (cp) {
       case "Typical Angina":
@@ -159,11 +260,18 @@ export default function HeartDiseaseDiagnosis() {
     );
     if (
       result.diagnosis.toLowerCase().includes("likelihood") ||
-      result.diagnosis.toLowerCase().includes("possible indication")
+      result.diagnosis.toLowerCase().includes("possible indication") ||
+      result.prediction_class === 1 // Assuming 1 means positive for heart disease
     ) {
       icon = (
         <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
       );
+      if (result.prediction_class === 1) {
+        // More explicit check for high risk
+        icon = (
+          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+        );
+      }
     }
 
     return (
@@ -172,34 +280,27 @@ export default function HeartDiseaseDiagnosis() {
         <div>
           <h3 className="font-semibold text-lg">Diagnosis Result</h3>
           <p className="text-sm">{result.diagnosis}</p>
+          {result.interpretation?.recommendation && (
+            <p className="text-sm mt-1 font-medium">
+              {result.interpretation.recommendation}
+            </p>
+          )}
+          {result.probability !== undefined && (
+            <p className="text-sm mt-1">
+              Probability of Heart Disease:{" "}
+              {(result.probability * 100).toFixed(2)}%
+            </p>
+          )}
         </div>
       </>
     );
   };
 
   const getRiskFactorMessage = (result) => {
-    if (result.interpretation?.significant_risk_factors) {
-      return (
-        <div className="bg-white p-4 rounded-lg border shadow-sm mt-4">
-          <h4 className="font-medium mb-3">Risk Factor Analysis</h4>
-          <p className="text-sm">
-            {result.interpretation.significant_risk_factors.message}
-          </p>
-          {result.interpretation.significant_risk_factors.factors && (
-            <ul className="list-disc list-inside ml-5">
-              {Object.entries(
-                result.interpretation.significant_risk_factors.factors
-              ).map(([factor, value]) => (
-                <li key={factor} className="text-sm">
-                  {factor}: {value}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      );
-    }
-    return null;
+    // This section seems to be designed for a more detailed interpretation from the backend.
+    // If the backend doesn't provide `significant_risk_factors`, this will not display.
+    // The current backend code does not produce this.
+    return null; // Returning null as current backend doesn't provide this.
   };
 
   const getDisclaimer = (result) => {
@@ -382,15 +483,17 @@ export default function HeartDiseaseDiagnosis() {
                             {field.type === "select" ? (
                               <Select
                                 onValueChange={(value) =>
-                                  handleChange({
-                                    target: { name: field.name, value },
-                                  })
+                                  handleSelectChange(field.name, value)
                                 }
                                 value={formData[field.name]}
                               >
                                 <SelectTrigger
                                   id={field.name}
-                                  className="w-full"
+                                  className={`w-full ${
+                                    validationErrors[field.name]
+                                      ? "border-red-500"
+                                      : ""
+                                  }`}
                                 >
                                   <SelectValue
                                     placeholder={`Select ${field.label}`}
@@ -415,9 +518,18 @@ export default function HeartDiseaseDiagnosis() {
                                 step={field.step || undefined}
                                 value={formData[field.name]}
                                 onChange={handleChange}
-                                className="w-full"
+                                className={`w-full ${
+                                  validationErrors[field.name]
+                                    ? "border-red-500"
+                                    : ""
+                                }`}
                                 placeholder={`Enter ${field.label}`}
                               />
+                            )}
+                            {validationErrors[field.name] && (
+                              <p className="text-red-500 text-xs">
+                                {validationErrors[field.name]}
+                              </p>
                             )}
                           </div>
                         ))}
@@ -485,13 +597,8 @@ export default function HeartDiseaseDiagnosis() {
                       className={`p-4 rounded-lg border ${
                         result.error
                           ? "bg-red-50 border-red-200"
-                          : result.diagnosis
-                              ?.toLowerCase()
-                              .includes("likelihood") ||
-                            result.diagnosis
-                              ?.toLowerCase()
-                              .includes("possible indication")
-                          ? "bg-yellow-50 border-yellow-200"
+                          : result.prediction_class === 1 // Use prediction_class for color logic
+                          ? "bg-red-50 border-red-200"
                           : "bg-green-50 border-green-200"
                       }`}
                     >

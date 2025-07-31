@@ -1,196 +1,249 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import axios from "axios"; // Still good to keep if you later integrate with a backend for tool suggestions
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  FaUserMd,
-  FaNotesMedical,
-  FaListAlt,
   FaStethoscope,
-  FaHeart,
-  FaUserInjured,
-  FaProcedures,
-  FaPlus,
+  FaClinicMedical,
+  FaBookMedical,
   FaSearch,
+  FaToolbox, // New icon for tools
+  FaFlask, // Another tool-related icon
+  FaLaptopMedical, // For AI tools
 } from "react-icons/fa";
-import { GiHealthNormal } from "react-icons/gi";
-import { MdSick, MdHealthAndSafety } from "react-icons/md";
-import { BASE_API_URL } from "../utils/apiConfig"; // Ensure this path is correct
+import { MdHealthAndSafety } from "react-icons/md";
+import { BASE_API_URL } from "../utils/apiConfig"; // Keep if you still have other API calls
+
+// Define your available diagnosis tools/services and what they target
+const availableDiagnosisTools = [
+  {
+    id: "malaria",
+    name: "Malaria Diagnosis Tool",
+    href: "/malaria-diagnosis", // Added href for direct navigation
+    targets: ["malaria", "fever", "parasites", "blood test"],
+  },
+  {
+    id: "hepatitis",
+    name: "Hepatitis C Diagnosis Tool",
+    href: "/hepatitis-diagnosis", // Added href for direct navigation
+    targets: ["hepatitis c", "liver", "viral infection", "blood panel"],
+  },
+  {
+    id: "heart",
+    name: "Heart Disease Prediction Tool",
+    href: "/heart-disease-diagnosis", // Added href for direct navigation
+    targets: [
+      "heart disease",
+      "cardiac",
+      "chest pain",
+      "cholesterol",
+      "blood pressure",
+    ],
+  },
+  {
+    id: "kidney",
+    name: "Kidney Disease Assessment",
+    href: "/kidney-disease-diagnosis", // Added href for direct navigation
+    targets: ["kidney disease", "renal", "kidney function", "dialysis"],
+  },
+  {
+    id: "diabetes",
+    name: "Diabetes Risk Calculator",
+    href: "/diabetes-diagnosis", // Example new href
+    targets: ["diabetes", "blood sugar", "insulin", "glucose"],
+  },
+  {
+    id: "hypertension",
+    name: "Hypertension Monitoring System",
+    href: "/hypertension-monitoring", // Example new href
+    targets: ["hypertension", "high blood pressure", "bp", "blood pressure"],
+  },
+  // Add more tools as needed
+];
 
 function Home() {
-  const [patients, setPatients] = useState([]);
-  const [loadingPatients, setLoadingPatients] = useState(true);
-  const [errorPatients, setErrorPatients] = useState(null);
-  const [selectedPatientId, setSelectedPatientId] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [recentToolSearches, setRecentToolSearches] = useState([]); // Renamed from recentSearches
+  const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchPatients = async () => {
-      setLoadingPatients(true);
-      setErrorPatients(null);
-      try {
-        const response = await axios.get(`${BASE_API_URL}/patients`); // Use BASE_API_URL here
-        setPatients(response.data);
-      } catch (error) {
-        console.error("Error fetching patients:", error);
-        setErrorPatients("Could not retrieve patient list.");
-      } finally {
-        setLoadingPatients(false);
-      }
-    };
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
 
-    fetchPatients();
-  }, []);
+    // Check if the search query exactly matches an available tool name
+    const matchedTool = availableDiagnosisTools.find(
+      (tool) => tool.name.toLowerCase() === searchQuery.toLowerCase()
+    );
 
-  const handlePatientClick = (patientId) => {
-    setSelectedPatientId(patientId);
-    navigate(`/patients/${patientId}`);
+    if (matchedTool) {
+      // If an exact match, navigate directly to the tool's page
+      navigate(matchedTool.href);
+    } else {
+      // Otherwise, save to recent searches and navigate to a generic search results page
+      const updatedSearches = [
+        searchQuery,
+        ...recentToolSearches.filter((item) => item !== searchQuery),
+      ].slice(0, 5);
+      setRecentToolSearches(updatedSearches);
+      localStorage.setItem(
+        "recentToolSearches",
+        JSON.stringify(updatedSearches)
+      );
+
+      navigate(`/diagnosis/tools?q=${encodeURIComponent(searchQuery)}`);
+    }
   };
 
-  const filteredPatients = patients.filter((patient) =>
-    patient.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const fetchToolSuggestions = (query) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const lowerQuery = query.toLowerCase();
+    const filteredSuggestions = availableDiagnosisTools
+      .filter(
+        (tool) =>
+          tool.name.toLowerCase().includes(lowerQuery) ||
+          tool.targets.some((target) => target.includes(lowerQuery))
+      )
+      .map((tool) => ({
+        name: tool.name, // Keep the full name for display
+        href: tool.href, // Add the href for navigation
+      }));
+
+    setSuggestions(filteredSuggestions);
+    setIsSearching(false);
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    fetchToolSuggestions(value);
+  };
+
+  // Function to navigate to a specific tool's page
+  const navigateToTool = (toolHref) => {
+    navigate(toolHref);
+    setSearchQuery(""); // Clear search query after navigation
+    setSuggestions([]); // Clear suggestions
+  };
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      <h1 className="text-3xl font-bold mb-6 text-center flex items-center justify-center gap-3">
-        <MdHealthAndSafety className="text-blue-500 text-4xl" />
-        Multi-Disease Diagnostic System
-        <MdHealthAndSafety className="text-blue-500 text-4xl" />
-      </h1>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Diagnosis Tools Card */}
-        <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <FaStethoscope className="text-blue-500" />
-              Diagnosis Tools
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="flex items-center gap-2 mb-4">
-              <MdSick className="text-xl" />
-              Access various diagnostic tools for different diseases
-            </CardDescription>
-            <Button asChild className="w-full">
-              <Link to="/diseases" className="flex items-center gap-2">
-                <FaSearch /> Start Diagnosis
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Patient Management Card - Larger on big screens */}
-        <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <FaUserInjured className="text-green-500 text-2xl" />
-              Patient Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="flex items-center gap-2 mb-4">
-              <GiHealthNormal className="text-xl" />
-              Select or search for a patient to view and manage their records
-            </CardDescription>
-
-            <div className="mb-4 flex gap-2">
-              <div className="relative flex-grow">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search patients..."
-                  className="pl-10 pr-4 py-2 w-full border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Button asChild>
-                <Link to="/patients/new" className="flex items-center gap-2">
-                  <FaPlus /> New
-                </Link>
-              </Button>
-            </div>
-
-            {loadingPatients ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-              </div>
-            ) : errorPatients ? (
-              <div className="text-red-500 p-4 bg-red-50 rounded-lg flex items-center gap-2">
-                <FaNotesMedical />
-                {errorPatients}
-              </div>
-            ) : (
-              <div className="max-h-96 overflow-y-auto">
-                {filteredPatients.length === 0 ? (
-                  <div className="text-center p-4 text-gray-500">
-                    {searchTerm
-                      ? "No matching patients found"
-                      : "No patients available"}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {filteredPatients.map((patient) => (
-                      <div
-                        key={patient.patient_id}
-                        className={`p-4 rounded-lg border hover:bg-blue-50 cursor-pointer transition-colors flex items-center gap-3 ${
-                          selectedPatientId === patient.patient_id
-                            ? "bg-blue-100 border-blue-300"
-                            : ""
-                        }`}
-                        onClick={() => handlePatientClick(patient.patient_id)}
-                      >
-                        <div className="bg-blue-100 p-3 rounded-full">
-                          <FaUserInjured className="text-blue-500" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">{patient.name}</h3>
-                          <p className="text-sm text-gray-500">
-                            ID: {patient.patient_id}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-4 flex justify-between">
-              <Button asChild variant="outline">
-                <Link to="/patients" className="flex items-center gap-2">
-                  <FaListAlt /> View All Patients
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link to="/patients/new" className="flex items-center gap-2">
-                  <FaPlus /> Add New Patient
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {selectedPatientId && (
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FaUserInjured className="text-green-500" />
-            Selected Patient:{" "}
-            {patients.find((p) => p.patient_id === selectedPatientId)?.name}
-          </h2>
+    <div className="max-w-4xl mx-auto py-12 px-4 min-h-screen">
+      <div className="flex flex-col items-center justify-center">
+        <div className="flex items-center gap-3 mb-8">
+          <MdHealthAndSafety className="text-blue-500 text-5xl" />
+          <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
+            Diagnosis Tool Finder
+          </h1>
         </div>
-      )}
+
+        <form onSubmit={handleSearch} className="w-full max-w-2xl mb-12">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+              <FaSearch className="text-gray-400" />
+            </div>
+            <Input
+              type="text"
+              className="pl-12 pr-12 py-6 text-lg rounded-full shadow-lg focus-visible:ring-2 focus-visible:ring-blue-500"
+              placeholder="Search for diagnosis tools (e.g., 'malaria tool', 'heart disease prediction')..."
+              value={searchQuery}
+              onChange={handleInputChange}
+              autoFocus
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-4">
+              {isSearching ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-blue-500"></div>
+              ) : (
+                <FaToolbox className="text-gray-400" />
+              )}
+            </div>
+          </div>
+
+          {suggestions.length > 0 && (
+            <div className="mt-2 bg-white rounded-lg shadow-lg border border-gray-200 w-full">
+              {suggestions.map((suggestion, index) => (
+                <div
+                  key={index}
+                  className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+                  onClick={() => navigateToTool(suggestion.href)} // Navigate directly to the tool's href
+                >
+                  <FaSearch className="text-gray-400" />
+                  <span>{suggestion.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </form>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+          {/* Recent Tool Searches */}
+          {recentToolSearches.length > 0 && (
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Recent Tool Searches</CardTitle>{" "}
+                {/* Changed title */}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {recentToolSearches.map((search, index) => {
+                    const toolMatch = availableDiagnosisTools.find(
+                      (tool) => tool.name.toLowerCase() === search.toLowerCase()
+                    );
+                    return (
+                      <Button
+                        key={index}
+                        variant="ghost"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          if (toolMatch) {
+                            navigateToTool(toolMatch.href); // Navigate directly if a match
+                          } else {
+                            navigate(
+                              `/diagnosis/tools?q=${encodeURIComponent(search)}`
+                            ); // Fallback to search results
+                          }
+                        }}
+                      >
+                        <FaSearch className="mr-2 text-gray-500" />
+                        {search}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Quick Access Cards - These were already good, just keeping them */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 w-full">
+          <Button variant="outline" className="h-24 flex-col gap-2" asChild>
+            <Link to="/diagnosis">
+              <FaStethoscope className="text-xl" />
+              <span>All Diagnosis Tools</span> {/* Changed text for clarity */}
+            </Link>
+          </Button>
+          <Button variant="outline" className="h-24 flex-col gap-2" asChild>
+            <Link to="/patients">
+              <FaClinicMedical className="text-xl" />
+              <span>Patient Records</span>
+            </Link>
+          </Button>
+          <Button variant="outline" className="h-24 flex-col gap-2" asChild>
+            <Link to="/knowledge-base">
+              <FaBookMedical className="text-xl" />
+              <span>Medical Library</span>
+            </Link>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

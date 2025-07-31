@@ -1,163 +1,167 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { FaGithub, FaLinkedin, FaTwitter, FaEnvelope } from "react-icons/fa";
-import { IoMdHeart } from "react-icons/io";
+import {
+  FaFacebook,
+  FaTwitter,
+  FaInstagram,
+  FaLinkedin,
+  FaHeart,
+} from "react-icons/fa";
 
 const Footer = () => {
-  const currentYear = new Date().getFullYear();
-
-  const quickLinks = [
-    { name: "Home", path: "/" },
-    { name: "About", path: "/about" },
-    { name: "Services", path: "/services" },
-    { name: "Contact", path: "/contact" },
-    { name: "Privacy Policy", path: "/privacy" },
-    { name: "Terms of Service", path: "/terms" },
-  ];
-
-  const socialLinks = [
-    {
-      name: "GitHub",
-      url: "https://github.com/t-boye",
-      icon: <FaGithub className="h-5 w-5" />,
-    },
-    {
-      name: "LinkedIn",
-      url: "https://www.linkedin.com/in/tboyeofficial",
-      icon: <FaLinkedin className="h-5 w-5" />,
-    },
-    // {
-    //   name: "Twitter",
-    //   url: "https://twitter.com/yourhandle",
-    //   icon: <FaTwitter className="h-5 w-5" />,
-    // },
-    {
-      name: "Email",
-      url: "mailto:emmanuelboye1957@gmail.com",
-      icon: <FaEnvelope className="h-5 w-5" />,
-    },
-  ];
-
   return (
-    <footer className="bg-gray-800 text-gray-300">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
+    <footer className="bg-gray-900 text-gray-300 pt-16 pb-8 px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Logo and Top Section */}
+        <div className="flex flex-col items-center mb-12">
+          <Link to="/" className="mb-6">
+            <img
+              src="https://i.postimg.cc/wxJ7TKPg/clarity.png" // Replace with your logo path
+              alt="ClarityDX Logo"
+              className="h-36 w-auto"
+            />
+          </Link>
+          <p className="text-center max-w-2xl mx-auto text-lg text-gray-400">
+            Precise and reliable diagnostics tailored for every need
+          </p>
+        </div>
+
+        {/* Main Footer Content */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
           {/* About Section */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">
-              Expert Diagnosis System
-            </h3>
-            <p className="text-sm">
-              AI-powered diagnostic tools for accurate and early disease
-              detection.
+            <h3 className="text-xl font-bold text-white mb-4">About Us</h3>
+            <p className="text-gray-400">
+              Delivering empathetic healthcare solutions powered by AI and ML to
+              support medical professionals.
             </p>
-            <div className="flex space-x-4">
-              {socialLinks.map((social) => (
-                <a
-                  key={social.name}
-                  href={social.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors"
-                  aria-label={social.name}
-                >
-                  {social.icon}
-                </a>
-              ))}
-            </div>
-          </div>
 
-          {/* Quick Links */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Quick Links</h3>
-            <ul className="space-y-2">
-              {quickLinks.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    to={link.path}
-                    className="text-sm hover:text-white transition-colors"
-                  >
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <address className="not-italic text-gray-400 mt-4">
+              <p>Accra, Ghana</p>
+            </address>
           </div>
 
           {/* Services */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Our Services</h3>
+            <h3 className="text-xl font-bold text-white mb-4">Services</h3>
             <ul className="space-y-2">
               <li>
-                <Link
-                  to="/malaria-diagnosis"
-                  className="text-sm hover:text-white transition-colors"
-                >
-                  Malaria Diagnosis
+                <Link to="/conditions" className="hover:text-white transition">
+                  Conditions
                 </Link>
               </li>
               <li>
                 <Link
-                  to="/hepatitis-diagnosis"
-                  className="text-sm hover:text-white transition-colors"
+                  to="/appointments"
+                  className="hover:text-white transition"
                 >
-                  Hepatitis C Diagnosis
+                  Make Appointment
                 </Link>
               </li>
               <li>
-                <Link
-                  to="/heart-disease-diagnosis"
-                  className="text-sm hover:text-white transition-colors"
-                >
-                  Heart Disease Diagnosis
+                <Link to="/doctors" className="hover:text-white transition">
+                  Our Doctors
                 </Link>
               </li>
               <li>
-                <Link
-                  to="/kidney-disease-diagnosis"
-                  className="text-sm hover:text-white transition-colors"
-                >
-                  Kidney Disease Diagnosis
+                <Link to="/articles" className="hover:text-white transition">
+                  Health Articles
+                </Link>
+              </li>
+              <li>
+                <Link to="/contact" className="hover:text-white transition">
+                  Contact Us
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Contact Info */}
+          {/* Quick Links */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Contact Us</h3>
-            <address className="not-italic text-sm space-y-2">
-              <p>8910 Medical Drive</p>
-              <p>Accra - Ghana</p>
-              <p>
-                <a
-                  href="tel:+1234567890"
-                  className="hover:text-white transition-colors"
+            <h3 className="text-xl font-bold text-white mb-4">Quick Links</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link to="/privacy" className="hover:text-white transition">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms" className="hover:text-white transition">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link to="/faq" className="hover:text-white transition">
+                  FAQs
+                </Link>
+              </li>
+              <li>
+                <Link to="/careers" className="hover:text-white transition">
+                  Careers
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/testimonials"
+                  className="hover:text-white transition"
                 >
-                  +233 (0) 59-350-1488
-                </a>
-              </p>
-              <p>
+                  Patient Stories
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Contact & Social */}
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold text-white mb-4">Contact Us</h3>
+            <div className="space-y-2 text-gray-400">
+              <p>Office: 00091997052300</p>
+              <p>Mobile: 000 2222 12345</p>
+              <p>Email: info@claritydx.com</p>
+            </div>
+
+            <div className="mt-6">
+              <h4 className="text-lg font-semibold text-white mb-3">
+                Follow Us
+              </h4>
+              <div className="flex space-x-4">
                 <a
-                  href="mailto:support@expertsystem.com"
-                  className="hover:text-white transition-colors"
+                  href="#"
+                  className="text-gray-400 hover:text-white transition"
                 >
-                  support@expertsystem.com
+                  <FaFacebook size={20} />
                 </a>
-              </p>
-            </address>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white transition"
+                >
+                  <FaTwitter size={20} />
+                </a>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white transition"
+                >
+                  <FaInstagram size={20} />
+                </a>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white transition"
+                >
+                  <FaLinkedin size={20} />
+                </a>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Copyright Section */}
-        <div className="mt-12 pt-8 border-t border-gray-700 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-sm flex items-center">
-            Made with <IoMdHeart className="mx-1 text-red-400" /> by Emmanuel
-            Tete Boye
+        {/* Copyright and Attribution */}
+        <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center">
+          <p className="text-gray-500 text-sm mb-4 md:mb-0">
+            &copy; {new Date().getFullYear()} ClarityDX. All rights reserved.
           </p>
-          <p className="text-sm mt-4 md:mt-0">
-            &copy; {currentYear} Expert System in Diagnosis. All rights
-            reserved.
+          <p className="text-gray-500 text-sm flex items-center">
+            Made with <FaHeart className="mx-1 text-red-400" /> by YBoye
+            Emmanuel Tete
           </p>
         </div>
       </div>
