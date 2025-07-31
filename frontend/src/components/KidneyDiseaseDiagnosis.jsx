@@ -329,7 +329,7 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
         <div className="absolute bottom-0 left-1/3 w-40 h-40 rounded-full bg-blue-100 opacity-10 animate-float3"></div>
       </div>
 
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-gray-800 mb-3">
             Kidney Health Assessment

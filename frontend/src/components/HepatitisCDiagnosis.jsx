@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +12,7 @@ import Select, {
 import axios from "axios";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
-import { BASE_API_URL } from "../utils/apiConfig"; // <--- ADD THIS LINE!
-// Ensure the path '../utils/apiConfig' is correct relative to this file.
+import { BASE_API_URL } from "../utils/apiConfig";
 
 export default function HepatitisCDiagnosis() {
   const [formData, setFormData] = useState({
@@ -30,8 +29,8 @@ export default function HepatitisCDiagnosis() {
     GGT: "",
     PROT: "",
     "AST/ALT": "",
-    AgeGroup_Middle: 0, // Default to 0
-    AgeGroup_Old: 0, // Default to 0
+    AgeGroup_Middle: 0,
+    AgeGroup_Old: 0,
   });
 
   const [result, setResult] = useState(null);
@@ -42,7 +41,6 @@ export default function HepatitisCDiagnosis() {
     const { name, value } = e.target;
     let newValue = value;
 
-    // Convert to number if the field is expected to be numeric
     if (
       [
         "Age",
@@ -69,16 +67,14 @@ export default function HepatitisCDiagnosis() {
     setLoading(true);
     setError(null);
 
-    // Calculate AST/ALT ratio safely
     let astAltRatio = null;
     if (formData.ALT !== "" && Number(formData.ALT) !== 0) {
       astAltRatio = Number(formData.AST) / Number(formData.ALT);
     }
 
-    // Prepare the data, ensuring that numerical values are numbers, and handle nulls
     const backendFormData = {
       Age: formData.Age ? Number(formData.Age) : null,
-      Sex: formData.Sex, // Keep as string "m" or "f"
+      Sex: formData.Sex,
       ALB: formData.ALB ? Number(formData.ALB) : null,
       ALP: formData.ALP ? Number(formData.ALP) : null,
       ALT: formData.ALT ? Number(formData.ALT) : null,
@@ -89,15 +85,14 @@ export default function HepatitisCDiagnosis() {
       CREA: formData.CREA ? Number(formData.CREA) : null,
       GGT: formData.GGT ? Number(formData.GGT) : null,
       PROT: formData.PROT ? Number(formData.PROT) : null,
-      "AST/ALT": astAltRatio, // Use the safely calculated ratio
-      AgeGroup_Middle: formData.AgeGroup_Middle, // Already a number (0 or 1)
-      AgeGroup_Old: formData.AgeGroup_Old, // Already a number (0 or 1)
+      "AST/ALT": astAltRatio,
+      AgeGroup_Middle: formData.AgeGroup_Middle,
+      AgeGroup_Old: formData.AgeGroup_Old,
     };
 
     try {
-      // THIS IS THE CRUCIAL CHANGE:
       const response = await axios.post(
-        `${BASE_API_URL}/predict/hepatitis_c`, // <--- UPDATED URL HERE!
+        `${BASE_API_URL}/predict/hepatitis_c`,
         backendFormData
       );
       setResult(response.data);
@@ -115,7 +110,7 @@ export default function HepatitisCDiagnosis() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6">
       <Card className="shadow-lg p-6">
         <h2 className="text-xl font-bold text-center mb-4">
           Hepatitis C Diagnosis
@@ -124,6 +119,7 @@ export default function HepatitisCDiagnosis() {
           onSubmit={handleSubmit}
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
         >
+          {/* Form inputs... */}
           <div>
             <Label>Age</Label>
             <Input
@@ -134,7 +130,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>Sex</Label>
             <Select
@@ -152,7 +147,6 @@ export default function HepatitisCDiagnosis() {
               </SelectContent>
             </Select>
           </div>
-
           <div>
             <Label>ALB</Label>
             <Input
@@ -163,7 +157,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>ALP</Label>
             <Input
@@ -174,7 +167,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>ALT</Label>
             <Input
@@ -185,7 +177,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>AST</Label>
             <Input
@@ -196,7 +187,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>BIL</Label>
             <Input
@@ -207,7 +197,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>CHE</Label>
             <Input
@@ -218,7 +207,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>CHOL</Label>
             <Input
@@ -229,7 +217,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>CREA</Label>
             <Input
@@ -240,7 +227,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>GGT</Label>
             <Input
@@ -251,7 +237,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>PROT</Label>
             <Input
@@ -262,7 +247,6 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>AST/ALT</Label>
             <Input
@@ -273,14 +257,13 @@ export default function HepatitisCDiagnosis() {
               required
             />
           </div>
-
           <div>
             <Label>AgeGroup_Middle</Label>
             <Select
               onValueChange={(value) =>
                 setFormData({ ...formData, AgeGroup_Middle: Number(value) })
               }
-              value={formData.AgeGroup_Middle}
+              value={String(formData.AgeGroup_Middle)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select" />
@@ -291,14 +274,13 @@ export default function HepatitisCDiagnosis() {
               </SelectContent>
             </Select>
           </div>
-
           <div>
             <Label>AgeGroup_Old</Label>
             <Select
               onValueChange={(value) =>
                 setFormData({ ...formData, AgeGroup_Old: Number(value) })
               }
-              value={formData.AgeGroup_Old}
+              value={String(formData.AgeGroup_Old)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select" />
@@ -309,7 +291,6 @@ export default function HepatitisCDiagnosis() {
               </SelectContent>
             </Select>
           </div>
-
           <div className="col-span-1 sm:col-span-2 md:col-span-3 flex justify-center">
             <Button
               type="submit"
