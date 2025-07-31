@@ -23,13 +23,17 @@ __pycache__/
 # *.h5
 # *.onnx
 
-# Trained model storage
-# backend/models/
 
 # --------------------------
 # Datasets
 # --------------------------
 backend/dataset/
+
+
+# --------------------------
+# Trained model storage
+# --------------------------
+backend/models/
 
 # --------------------------
 # Logs and temporary files
