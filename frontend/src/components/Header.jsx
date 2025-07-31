@@ -538,13 +538,10 @@ const Header = () => {
               onClick={() => setMobileMenuOpen(false)}
             >
               <img
-                className="h-8 w-auto mr-2"
+                className="h-16 w-auto mr-2"
                 src="https://i.postimg.cc/wxJ7TKPg/clarity.png"
                 alt="ClarityDX Logo"
               />
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
-                ClarityDX
-              </span>
             </Link>
             <button
               type="button"

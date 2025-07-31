@@ -153,14 +153,14 @@ const About = () => {
                 Our{" "}
                 <span className="font-semibold text-blue-600">
                   ClarityDX platform
-                </span>
+                </span>{" "}
                 combines specialized AI models with clinical decision rules to
                 provide accurate diagnoses across diverse medical conditions.
               </p>
 
               <div className="mt-8 rounded-lg overflow-hidden shadow-lg">
                 <img
-                  src="https://i.postimg.cc/ZK9N9QpB/homepage.png"
+                  src="https://i.postimg.cc/FKvcDGwX/clarity-DX-homepage.png"
                   alt="ClarityDX interface"
                   className="w-full h-auto"
                   loading="lazy"
@@ -296,9 +296,11 @@ const About = () => {
             Join hundreds of healthcare providers using ClarityDX to enhance
             their diagnostic capabilities
           </p>
-          <button className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:from-blue-700 hover:to-blue-600">
-            Get Started with ClarityDX
-          </button>
+          <a href="/">
+            <button className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-8 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:from-blue-700 hover:to-blue-600">
+              Get Started with ClarityDX
+            </button>
+          </a>
         </div>
       </div>
     </div>

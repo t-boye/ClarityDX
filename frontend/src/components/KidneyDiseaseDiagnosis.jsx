@@ -11,7 +11,14 @@ import Select, {
 } from "@/components/ui/select";
 import axios from "axios";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+  FlaskConical,
+  FileText,
+  HeartPulse,
+} from "lucide-react";
 import { BASE_API_URL } from "../utils/apiConfig";
 
 export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
@@ -61,91 +68,53 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
   };
 
   useEffect(() => {
-    const allFieldsValid = Object.keys(formData).every((key) => {
-      if (!selectOptions[key]) {
-        return formData[key] !== "";
-      }
-      return true;
-    });
-    setIsFormValid(allFieldsValid);
-  }, [formData]);
+    const numericFields = Object.keys(formData).filter(
+      (key) => !selectOptions[key]
+    );
+    const allNumericFieldsFilled = numericFields.every(
+      (key) => formData[key] !== "" && !isNaN(Number(formData[key]))
+    );
+    setIsFormValid(allNumericFieldsFilled);
+  }, [formData, selectOptions]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
+
+  const handleSelectChange = (name, value) => {
+    setFormData((prevData) => ({ ...prevData, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!isFormValid) {
-      setError("Please fill in all the required fields.");
+      setError("Please fill in all the numeric fields before submitting.");
       return;
     }
 
     setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
       const apiData = {
-        "Age (yrs)": formData["Age (yrs)"]
-          ? parseFloat(formData["Age (yrs)"])
-          : null,
-        "Blood Pressure (mm/Hg)": formData["Blood Pressure (mm/Hg)"]
-          ? parseFloat(formData["Blood Pressure (mm/Hg)"])
-          : null,
-        "Specific Gravity": formData["Specific Gravity"]
-          ? parseFloat(formData["Specific Gravity"])
-          : null,
-        Albumin: formData.Albumin ? parseFloat(formData.Albumin) : null,
-        Sugar: formData.Sugar ? parseFloat(formData.Sugar) : null,
-        "Blood Glucose Random (mgs/dL)": formData[
-          "Blood Glucose Random (mgs/dL)"
-        ]
-          ? parseFloat(formData["Blood Glucose Random (mgs/dL)"])
-          : null,
-        "Blood Urea (mgs/dL)": formData["Blood Urea (mgs/dL)"]
-          ? parseFloat(formData["Blood Urea (mgs/dL)"])
-          : null,
-        "Serum Creatinine (mgs/dL)": formData["Serum Creatinine (mgs/dL)"]
-          ? parseFloat(formData["Serum Creatinine (mgs/dL)"])
-          : null,
-        "Sodium (mEq/L)": formData["Sodium (mEq/L)"]
-          ? parseFloat(formData["Sodium (mEq/L)"])
-          : null,
-        "Potassium (mEq/L)": formData["Potassium (mEq/L)"]
-          ? parseFloat(formData["Potassium (mEq/L)"])
-          : null,
-        "Hemoglobin (gms)": formData["Hemoglobin (gms)"]
-          ? parseFloat(formData["Hemoglobin (gms)"])
-          : null,
-        "Packed Cell Volume": formData["Packed Cell Volume"]
-          ? parseFloat(formData["Packed Cell Volume"])
-          : null,
-        "White Blood Cells (cells/cmm)": formData[
-          "White Blood Cells (cells/cmm)"
-        ]
-          ? parseFloat(formData["White Blood Cells (cells/cmm)"])
-          : null,
-        "Red Blood Cells (millions/cmm)": formData[
-          "Red Blood Cells (millions/cmm)"
-        ]
-          ? parseFloat(formData["Red Blood Cells (millions/cmm)"])
-          : null,
-        "Red Blood Cells: normal":
-          formData["Red Blood Cells: normal"] === "normal" ? 1 : 0,
-        "Pus Cells: normal": formData["Pus Cells: normal"] === "normal" ? 1 : 0,
-        "Pus Cell Clumps: present":
-          formData["Pus Cell Clumps: present"] === "present" ? 1 : 0,
-        "Bacteria: present":
-          formData["Bacteria: present"] === "present" ? 1 : 0,
-        "Hypertension: yes": formData["Hypertension: yes"] === "yes" ? 1 : 0,
-        "Diabetes Mellitus: yes":
-          formData["Diabetes Mellitus: yes"] === "yes" ? 1 : 0,
-        "Coronary Artery Disease: yes":
-          formData["Coronary Artery Disease: yes"] === "yes" ? 1 : 0,
-        "Appetite: poor": formData["Appetite: poor"] === "poor" ? 1 : 0,
-        "Pedal Edema: yes": formData["Pedal Edema: yes"] === "yes" ? 1 : 0,
-        "Anemia: yes": formData["Anemia: yes"] === "yes" ? 1 : 0,
+        ...formData,
+        ...Object.fromEntries(
+          Object.entries(formData).map(([key, value]) => {
+            if (selectOptions[key]) {
+              return [
+                key,
+                value === "yes" || value === "normal" || value === "present"
+                  ? 1
+                  : 0,
+              ];
+            } else {
+              return [key, parseFloat(value)];
+            }
+          })
+        ),
       };
 
       const response = await axios.post(
@@ -156,110 +125,100 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
         }
       );
 
-      console.log("Full API Response:", response.data);
-
       setResult(response.data);
       if (onDiagnosis) {
         onDiagnosis(response.data);
       }
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
         setError(
-          error.response?.data?.error ||
-            error.response?.data?.response?.message ||
-            "An error occurred."
+          err.response?.data?.error ||
+            err.response?.data?.response?.message ||
+            "An error occurred while communicating with the server."
         );
-        console.error("Axios error:", error.response?.data || error.message);
+        console.error("Axios error:", err.response?.data || err.message);
       } else {
         setError("Failed to connect to the server.");
-        console.error("Non-Axios error:", error);
+        console.error("Non-Axios error:", err);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const getDiagnosisMessage = (result) => {
-    if (result.error) {
+  const getDiagnosisMessage = (res) => {
+    if (res.error) {
       return (
-        <>
+        <div className="flex items-start gap-4">
           <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-          <p className="text-sm">{result.error}</p>
-        </>
+          <p className="text-sm">{res.error}</p>
+        </div>
       );
     }
 
     const diagnosisText =
-      result.diagnosis ||
-      (result.class_names && result.prediction !== undefined
-        ? result.class_names[result.prediction]
+      res.diagnosis ||
+      (res.class_names && res.prediction !== undefined
+        ? res.class_names[res.prediction]
         : null) ||
       "No diagnosis provided.";
 
-    let icon = (
+    const isCKD = diagnosisText?.toLowerCase().includes("ckd");
+    const icon = isCKD ? (
+      <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+    ) : (
       <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
     );
 
-    if (
-      diagnosisText &&
-      (diagnosisText.toLowerCase().includes("high likelihood") ||
-        diagnosisText.toLowerCase().includes("ckd"))
-    ) {
-      icon = (
-        <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-      );
-    }
-
     return (
-      <>
+      <div className="flex items-start gap-4">
         {icon}
         <div>
           <h3 className="font-semibold text-lg">Diagnosis Result</h3>
           <p className="text-sm">{diagnosisText}</p>
         </div>
-      </>
+      </div>
     );
   };
 
-  const getExplanation = (result) => {
-    if (result.explanation) {
-      const explanation = result.explanation;
+  const getExplanation = (res) => {
+    if (res.explanation) {
+      const explanation = res.explanation;
       return (
-        <div className="bg-white p-4 rounded-lg border shadow-sm mt-4">
-          <h4 className="font-medium mb-3">Explanation</h4>
-          <div className="space-y-3">
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <h4 className="font-semibold text-gray-800 text-lg mb-3 flex items-center gap-2">
+            <FileText className="h-5 w-5 text-blue-500" />
+            Detailed Analysis
+          </h4>
+          <div className="space-y-4 text-sm text-gray-700">
             {explanation.overall_assessment && (
               <div>
-                <h5 className="font-semibold">Overall Assessment:</h5>
-                <p className="text-sm">{explanation.overall_assessment}</p>
+                <h5 className="font-bold">Overall Assessment:</h5>
+                <p>{explanation.overall_assessment}</p>
               </div>
             )}
             {explanation.probability_ckd !== undefined && (
               <div>
-                <h5 className="font-semibold">Probability of CKD:</h5>
-                <p className="text-sm">
+                <h5 className="font-bold">Probability of CKD:</h5>
+                <p className="inline-block px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                   {(explanation.probability_ckd * 100).toFixed(2)}%
                 </p>
               </div>
             )}
-            {explanation.significant_risk_factors &&
-              explanation.significant_risk_factors.message && (
-                <div>
-                  <h5 className="font-semibold">
-                    {explanation.significant_risk_factors.message}
-                  </h5>
-                  <ul className="list-disc pl-5">
-                    {explanation.significant_risk_factors.factors &&
-                      explanation.significant_risk_factors.factors.map(
-                        (factor, index) => (
-                          <li key={index} className="text-sm">
-                            {factor}
-                          </li>
-                        )
-                      )}
-                  </ul>
-                </div>
-              )}
+            {explanation.significant_risk_factors?.factors?.length > 0 && (
+              <div>
+                <h5 className="font-bold">
+                  {explanation.significant_risk_factors.message}
+                </h5>
+                <ul className="list-disc pl-5 space-y-1">
+                  {explanation.significant_risk_factors.factors.map(
+                    (factor, index) => (
+                      <li key={index}>{factor}</li>
+                    )
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -267,11 +226,11 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
     return null;
   };
 
-  const getDisclaimer = (result) => {
-    if (result.explanation && result.explanation.disclaimer) {
+  const getDisclaimer = (res) => {
+    if (res.explanation && res.explanation.disclaimer) {
       return (
-        <p className="text-xs italic text-gray-500 mt-4">
-          {result.explanation.disclaimer}
+        <p className="text-xs italic text-gray-500 mt-4 text-center">
+          {res.explanation.disclaimer}
         </p>
       );
     }
@@ -280,42 +239,68 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
 
   const formFieldGroups = [
     {
-      title: "Basic Information",
+      title: "Patient Information",
+      icon: <FlaskConical className="h-5 w-5" />,
       fields: [
-        "Age (yrs)",
-        "Blood Pressure (mm/Hg)",
-        "Specific Gravity",
-        "Albumin",
-        "Sugar",
+        { label: "Age", name: "Age (yrs)", unit: "years" },
+        {
+          label: "Blood Pressure",
+          name: "Blood Pressure (mm/Hg)",
+          unit: "mm/Hg",
+        },
+        { label: "Specific Gravity", name: "Specific Gravity" },
+        { label: "Albumin", name: "Albumin" },
+        { label: "Sugar", name: "Sugar" },
       ],
     },
     {
       title: "Blood Test Results",
+      icon: <HeartPulse className="h-5 w-5" />,
       fields: [
-        "Blood Glucose Random (mgs/dL)",
-        "Blood Urea (mgs/dL)",
-        "Serum Creatinine (mgs/dL)",
-        "Sodium (mEq/L)",
-        "Potassium (mEq/L)",
-        "Hemoglobin (gms)",
-        "Packed Cell Volume",
-        "White Blood Cells (cells/cmm)",
-        "Red Blood Cells (millions/cmm)",
+        {
+          label: "Blood Glucose Random",
+          name: "Blood Glucose Random (mgs/dL)",
+          unit: "mgs/dL",
+        },
+        { label: "Blood Urea", name: "Blood Urea (mgs/dL)", unit: "mgs/dL" },
+        {
+          label: "Serum Creatinine",
+          name: "Serum Creatinine (mgs/dL)",
+          unit: "mgs/dL",
+        },
+        { label: "Sodium", name: "Sodium (mEq/L)", unit: "mEq/L" },
+        { label: "Potassium", name: "Potassium (mEq/L)", unit: "mEq/L" },
+        { label: "Hemoglobin", name: "Hemoglobin (gms)", unit: "gms" },
+        { label: "Packed Cell Volume", name: "Packed Cell Volume" },
+        {
+          label: "White Blood Cells",
+          name: "White Blood Cells (cells/cmm)",
+          unit: "cells/cmm",
+        },
+        {
+          label: "Red Blood Cells",
+          name: "Red Blood Cells (millions/cmm)",
+          unit: "millions/cmm",
+        },
       ],
     },
     {
-      title: "Additional Health Indicators",
+      title: "Clinical Observations",
+      icon: <FileText className="h-5 w-5" />,
       fields: [
-        "Red Blood Cells: normal",
-        "Pus Cells: normal",
-        "Pus Cell Clumps: present",
-        "Bacteria: present",
-        "Hypertension: yes",
-        "Diabetes Mellitus: yes",
-        "Coronary Artery Disease: yes",
-        "Appetite: poor",
-        "Pedal Edema: yes",
-        "Anemia: yes",
+        { label: "Red Blood Cells", name: "Red Blood Cells: normal" },
+        { label: "Pus Cells", name: "Pus Cells: normal" },
+        { label: "Pus Cell Clumps", name: "Pus Cell Clumps: present" },
+        { label: "Bacteria", name: "Bacteria: present" },
+        { label: "Hypertension", name: "Hypertension: yes" },
+        { label: "Diabetes Mellitus", name: "Diabetes Mellitus: yes" },
+        {
+          label: "Coronary Artery Disease",
+          name: "Coronary Artery Disease: yes",
+        },
+        { label: "Appetite", name: "Appetite: poor" },
+        { label: "Pedal Edema", name: "Pedal Edema: yes" },
+        { label: "Anemia", name: "Anemia: yes" },
       ],
     },
   ];
@@ -329,62 +314,64 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
         <div className="absolute bottom-0 left-1/3 w-40 h-40 rounded-full bg-blue-100 opacity-10 animate-float3"></div>
       </div>
 
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-800 mb-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-800 mb-4 leading-tight">
             Kidney Health Assessment
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Complete the form with your health metrics to receive a
-            comprehensive kidney function analysis
+          <p className="text-lg md:text-xl text-gray-500 max-w-3xl mx-auto">
+            Enter your health metrics below to receive a precise evaluation of
+            your kidney function and overall renal health.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Left column - Form */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <Card className="shadow-xl border-0 rounded-2xl overflow-hidden bg-white/90 backdrop-blur-sm">
               <CardContent className="p-8">
                 <form onSubmit={handleSubmit} className="space-y-8">
                   {formFieldGroups.map((group, groupIndex) => (
                     <div key={groupIndex} className="space-y-6">
-                      <h3 className="text-xl font-semibold text-gray-800 border-b pb-3 border-gray-200">
-                        {group.title}
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="flex items-center gap-3 border-b pb-3 border-gray-200">
+                        {group.icon}
+                        <h3 className="text-xl font-semibold text-gray-800">
+                          {group.title}
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {group.fields.map((field) => (
-                          <div key={field} className="space-y-3">
+                          <div key={field.name} className="space-y-2">
                             <Label
-                              htmlFor={field}
-                              className="text-gray-700 font-medium"
+                              htmlFor={field.name}
+                              className="text-gray-700 font-medium flex justify-between items-center"
                             >
-                              {field.replace(
-                                /: yes|: normal|: present|: poor/g,
-                                ""
+                              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">
+                                {field.label}
+                              </span>
+                              {field.unit && (
+                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                  {field.unit}
+                                </span>
                               )}
                             </Label>
-                            {selectOptions[field] ? (
+                            {selectOptions[field.name] ? (
                               <Select
                                 onValueChange={(value) =>
-                                  handleChange({
-                                    target: { name: field, value },
-                                  })
+                                  handleSelectChange(field.name, value)
                                 }
-                                defaultValue={formData[field]}
+                                defaultValue={formData[field.name]}
                               >
                                 <SelectTrigger
-                                  id={field}
+                                  id={field.name}
                                   className="w-full h-12"
                                 >
                                   <SelectValue
-                                    placeholder={`Select ${field.replace(
-                                      /: yes|: normal|: present|: poor/g,
-                                      ""
-                                    )}`}
+                                    placeholder={`Select ${field.label}`}
                                   />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {selectOptions[field].map((option) => (
+                                  {selectOptions[field.name].map((option) => (
                                     <SelectItem
                                       key={option}
                                       value={option}
@@ -398,16 +385,15 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
                               </Select>
                             ) : (
                               <Input
-                                id={field}
-                                name={field}
+                                id={field.name}
+                                name={field.name}
                                 type="number"
-                                value={formData[field]}
+                                step="any"
+                                value={formData[field.name]}
                                 onChange={handleChange}
                                 className="w-full h-12"
-                                placeholder={`Enter ${field.replace(
-                                  /: yes|: normal|: present|: poor/g,
-                                  ""
-                                )}`}
+                                placeholder={`Enter ${field.label}`}
+                                required
                               />
                             )}
                           </div>
@@ -477,8 +463,8 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
             </Card>
           </div>
 
-          {/* Right column - Results */}
-          <div className="space-y-8">
+          {/* Right column - Results & Tips */}
+          <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-xl border-0 rounded-2xl h-full bg-white/90 backdrop-blur-sm">
               <CardContent className="p-8">
                 <div className="flex items-center gap-3 mb-6">
@@ -524,11 +510,8 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
                           : "bg-green-50 border-green-200"
                       }`}
                     >
-                      <div className="flex items-start gap-4">
-                        {getDiagnosisMessage(result)}
-                      </div>
+                      {getDiagnosisMessage(result)}
                     </div>
-
                     {getExplanation(result)}
                     {getDisclaimer(result)}
                   </div>
@@ -607,14 +590,14 @@ export default function KidneyDiseaseDiagnosis({ onDiagnosis }) {
                   <li className="flex items-start gap-3">
                     <span className="text-indigo-500">•</span>
                     <span>
-                      Engage in regular physical activity to maintain healthy
+                      Engage in regular physical activity to maintain a healthy
                       weight
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
                     <span className="text-indigo-500">•</span>
                     <span>
-                      Limit use of NSAIDs and consult your doctor about
+                      Limit the use of NSAIDs and consult your doctor about
                       medications
                     </span>
                   </li>

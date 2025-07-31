@@ -246,7 +246,7 @@ function Home() {
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex-col gap-2 hover:bg-green-50"
+              className="h-20 flex-col gap-2 hover:bg-blue-55"
               asChild
             >
               <Link to="/patients">
@@ -256,7 +256,7 @@ function Home() {
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex-col gap-2 hover:bg-purple-50"
+              className="h-20 flex-col gap-2 hover:bg-blue-55"
               asChild
             >
               <Link to="/knowledge-base">

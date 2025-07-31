@@ -229,7 +229,7 @@ def normalize_symptom_name_api(symptom_name):
     if not cleaned:
         return None
     # Removed: return SYMPTOM_SYNONYMS.get(lemmatized, lemmatized)
-    return lemmatized_and_remove_stopwords_api(cleaned) # Directly return lemmatized text
+    return lemmatize_and_remove_stopwords_api(cleaned) 
 
 # --- =================  --- #
 #===== Pydantic models ======#

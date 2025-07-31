@@ -269,9 +269,9 @@ export default function HeartDiseaseDiagnosis() {
 
   const formFieldGroups = [
     {
-      title: "Patient Information",
+      title: "👤 Patient Information",
       fields: [
-        { name: "age", label: "Age (years)", type: "number" },
+        { name: "age", label: "Age", type: "number", unit: "years" },
         {
           name: "sex",
           label: "Sex",
@@ -284,7 +284,7 @@ export default function HeartDiseaseDiagnosis() {
       ],
     },
     {
-      title: "Cardiac Symptoms",
+      title: "💓 Cardiac Symptoms",
       fields: [
         {
           name: "cp",
@@ -299,7 +299,7 @@ export default function HeartDiseaseDiagnosis() {
         },
         {
           name: "exang",
-          label: "Exercise Induced Angina",
+          label: "Exercise Angina",
           type: "select",
           options: [
             { value: "No", label: "No" },
@@ -309,35 +309,47 @@ export default function HeartDiseaseDiagnosis() {
       ],
     },
     {
-      title: "Vital Signs",
+      title: "📊 Vital Signs",
       fields: [
-        { name: "trestbps", label: "Resting BP (mm Hg)", type: "number" },
-        { name: "thalach", label: "Max Heart Rate (bpm)", type: "number" },
+        {
+          name: "trestbps",
+          label: "Resting BP",
+          type: "number",
+          unit: "mm Hg",
+        },
+        {
+          name: "thalach",
+          label: "Max Heart Rate",
+          type: "number",
+          unit: "bpm",
+        },
         {
           name: "oldpeak",
-          label: "ST Depression (mm)",
+          label: "ST Depression",
           type: "number",
+          unit: "mm",
           step: "0.1",
         },
       ],
     },
     {
-      title: "Blood Tests",
+      title: "💉 Blood Tests",
       fields: [
-        { name: "chol", label: "Cholesterol (mg/dL)", type: "number" },
+        { name: "chol", label: "Cholesterol", type: "number", unit: "mg/dL" },
         {
           name: "fbs",
-          label: "Fasting BS > 120 mg/dL",
+          label: "Fasting BS > 120",
           type: "select",
           options: [
             { value: "No", label: "No" },
             { value: "Yes", label: "Yes" },
           ],
+          unit: "mg/dL",
         },
       ],
     },
     {
-      title: "ECG & Imaging",
+      title: "📈 ECG & Imaging",
       fields: [
         {
           name: "restecg",
@@ -345,8 +357,8 @@ export default function HeartDiseaseDiagnosis() {
           type: "select",
           options: [
             { value: "Normal", label: "Normal" },
-            { value: "ST-T Wave Abnormality", label: "ST-T Wave Abnormality" },
-            { value: "Left Ventricular Hypertrophy", label: "LV Hypertrophy" },
+            { value: "ST-T Abnormality", label: "ST-T Abnormality" },
+            { value: "LV Hypertrophy", label: "LV Hypertrophy" },
           ],
         },
         {
@@ -361,7 +373,7 @@ export default function HeartDiseaseDiagnosis() {
         },
         {
           name: "ca",
-          label: "Major Vessels (fluoroscopy)",
+          label: "Major Vessels",
           type: "select",
           options: [
             { value: "0", label: "0" },
@@ -369,11 +381,12 @@ export default function HeartDiseaseDiagnosis() {
             { value: "2", label: "2" },
             { value: "3", label: "3" },
           ],
+          unit: "fluoroscopy",
         },
       ],
     },
     {
-      title: "Other Factors",
+      title: "🧬 Other Factors",
       fields: [
         {
           name: "thal",
@@ -392,150 +405,174 @@ export default function HeartDiseaseDiagnosis() {
   return (
     <div className="min-h-screen bg-gray-50 py-4 px-4">
       <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-4">
-          <div className="flex items-center justify-center gap-2">
-            <HeartPulse className="h-6 w-6 text-red-500" />
-            <h1 className="text-xl font-bold text-gray-800">
-              Heart Disease Risk Assessment
-            </h1>
+        <Card className="shadow-lg overflow-hidden border border-gray-200">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-red-600 to-red-700 p-4 text-white">
+            <div className="flex items-center gap-3">
+              <HeartPulse className="h-6 w-6" />
+              <div>
+                <h1 className="text-xl font-bold">
+                  Heart Disease Risk Assessment
+                </h1>
+                <p className="text-sm text-red-100">
+                  Enter cardiovascular metrics to assess heart disease risk
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-gray-600 text-sm max-w-md mx-auto mt-1">
-            Enter your cardiovascular health metrics to assess your risk
-          </p>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Form Column */}
-          <div className="lg:col-span-2">
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {formFieldGroups.map((group, groupIndex) => (
-                    <div key={groupIndex} className="space-y-2">
-                      <h3 className="text-base font-semibold text-gray-700 border-b pb-1">
-                        {group.title}
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {group.fields.map((field) => (
-                          <div key={field.name} className="space-y-1">
-                            <Label htmlFor={field.name} className="text-xs">
-                              {field.label}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
+            {/* Form Column */}
+            <div className="lg:col-span-2 p-4 bg-white">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {formFieldGroups.map((group, groupIndex) => (
+                  <div key={groupIndex} className="space-y-3">
+                    <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+                      {group.title}
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {group.fields.map((field) => (
+                        <div key={field.name} className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <Label
+                              htmlFor={field.name}
+                              className="text-xs font-medium text-gray-700"
+                            >
+                              <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded-md">
+                                {field.label}
+                              </span>
                             </Label>
-                            {field.type === "select" ? (
-                              <Select
-                                onValueChange={(value) =>
-                                  handleSelectChange(field.name, value)
-                                }
-                                value={formData[field.name]}
-                              >
-                                <SelectTrigger
-                                  id={field.name}
-                                  className={`text-xs h-8 ${
-                                    validationErrors[field.name]
-                                      ? "border-red-500"
-                                      : ""
-                                  }`}
-                                >
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {field.options.map((option) => (
-                                    <SelectItem
-                                      key={option.value}
-                                      value={option.value}
-                                      className="text-xs"
-                                    >
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Input
-                                id={field.name}
-                                name={field.name}
-                                type={field.type}
-                                step={field.step || undefined}
-                                value={formData[field.name]}
-                                onChange={handleChange}
+                            {field.unit && (
+                              <span className="text-xs text-gray-500">
+                                {field.unit}
+                              </span>
+                            )}
+                          </div>
+                          {field.type === "select" ? (
+                            <Select
+                              onValueChange={(value) =>
+                                handleSelectChange(field.name, value)
+                              }
+                              value={formData[field.name]}
+                            >
+                              <SelectTrigger
                                 className={`text-xs h-8 ${
                                   validationErrors[field.name]
                                     ? "border-red-500"
                                     : ""
                                 }`}
-                              />
-                            )}
-                            {validationErrors[field.name] && (
-                              <p className="text-red-500 text-xs">
-                                {validationErrors[field.name]}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {field.options.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                    className="text-xs"
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              id={field.name}
+                              name={field.name}
+                              type={field.type}
+                              step={field.step || undefined}
+                              value={formData[field.name]}
+                              onChange={handleChange}
+                              className={`text-xs h-8 ${
+                                validationErrors[field.name]
+                                  ? "border-red-500"
+                                  : ""
+                              }`}
+                            />
+                          )}
+                          {validationErrors[field.name] && (
+                            <p className="text-red-500 text-xs">
+                              {validationErrors[field.name]}
+                            </p>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                ))}
 
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-9 text-sm"
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-2 text-sm shadow-md"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Analyzing...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <HeartPulse className="h-4 w-4" />
+                      Assess Heart Risk
+                    </span>
+                  )}
+                </Button>
+              </form>
+            </div>
+
+            {/* Results Column */}
+            <div className="bg-gray-50 p-4 border-l border-gray-200">
+              <div className="space-y-4">
+                <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    {loading ? (
-                      <span className="flex items-center justify-center">
-                        <svg
-                          className="animate-spin -ml-1 mr-2 h-3 w-3 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Analyzing...
-                      </span>
-                    ) : (
-                      "Assess Risk"
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Results Column */}
-          <div className="space-y-3">
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <h2 className="text-base font-bold text-gray-800 mb-2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                  </svg>
                   Assessment Results
                 </h2>
 
                 {error && (
-                  <Alert variant="destructive" className="mb-3 p-2">
-                    <AlertCircle className="h-3 w-3" />
-                    <AlertTitle className="text-xs">Error</AlertTitle>
-                    <AlertDescription className="text-xs">
-                      {error}
-                    </AlertDescription>
+                  <Alert variant="destructive" className="text-xs">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
 
                 {result ? (
                   <div className="space-y-3">
                     <div
-                      className={`p-2 rounded border text-xs ${
+                      className={`p-3 rounded-lg border ${
                         result.error
                           ? "bg-red-50 border-red-200"
                           : result.prediction_class === 1
@@ -543,44 +580,69 @@ export default function HeartDiseaseDiagnosis() {
                           : "bg-green-50 border-green-200"
                       }`}
                     >
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-3">
                         {getDiagnosisMessage(result)}
                       </div>
                     </div>
+
+                    <Card className="bg-blue-50 border-blue-200">
+                      <CardContent className="p-3">
+                        <h3 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-2">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                          </svg>
+                          Heart Health Guidance
+                        </h3>
+                        <ul className="text-xs text-blue-700 space-y-1">
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-500">•</span>
+                            Optimal BP: &lt;120/80 mm Hg
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-500">•</span>
+                            Healthy cholesterol: &lt;200 mg/dL
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-500">•</span>
+                            Target heart rate: 60-100 bpm (resting)
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-500">•</span>
+                            ST depression &gt;1mm may indicate ischemia
+                          </li>
+                        </ul>
+                      </CardContent>
+                    </Card>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-4 text-center">
-                    <div className="w-16 h-16 mb-2 rounded-full bg-gray-100 flex items-center justify-center">
-                      <HeartPulse className="h-5 w-5 text-gray-400" />
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <div className="w-16 h-16 mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+                      <HeartPulse className="h-6 w-6 text-gray-400" />
                     </div>
                     <h3 className="text-sm font-medium text-gray-700 mb-1">
                       No results yet
                     </h3>
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-xs text-gray-500">
                       Submit your information for assessment
                     </p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* Tips Card */}
-            <Card className="shadow-sm bg-red-50 border-red-100">
-              <CardContent className="p-3">
-                <h3 className="font-semibold text-xs text-red-800 mb-1">
-                  Heart Health Tips
-                </h3>
-                <ul className="space-y-1 text-xs text-red-700">
-                  <li>• Maintain a healthy diet</li>
-                  <li>• Exercise regularly</li>
-                  <li>• Monitor blood pressure</li>
-                  <li>• Control cholesterol</li>
-                  <li>• Avoid smoking</li>
-                </ul>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

@@ -127,7 +127,7 @@ function SymScanPredictor() {
 
       if (!response.ok) {
         setError(data.error || "An unknown error occurred on the server.");
-        setPredictionResult(data); // Include details even on error
+        setPredictionResult(data);
       } else {
         setPredictionResult(data);
       }
@@ -140,7 +140,6 @@ function SymScanPredictor() {
     }
   };
 
-  // Confidence badge component (same as your implementation)
   const ConfidenceBadge = ({ confidence }) => {
     let colorClass = "bg-yellow-400 text-yellow-900";
     if (confidence.endsWith("%")) {
@@ -160,45 +159,46 @@ function SymScanPredictor() {
   };
 
   return (
+    // Updated container to use `max-w-4xl` for a smaller overall footprint
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100 p-6 flex flex-col lg:flex-row lg:items-start lg:justify-center">
-      {/* Input Section */}
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full lg:w-1/2 max-w-xl lg:mr-8 mb-8 lg:mb-0">
-        <h2 className="text-4xl font-extrabold text-gray-900 mb-6 text-center lg:text-left">
-          Sym
-          <span className="text-indigo-600">Scan</span> Diagnosis
+      {/* Input Section - using `max-w-md` for a more compact form */}
+      <div className="bg-white p-8 rounded-xl shadow-2xl w-full lg:w-1/2 max-w-md lg:mr-8 mb-8 lg:mb-0">
+        <h2 className="text-3xl font-extrabold text-gray-900 mb-6 text-center lg:text-left">
+          Sym<span className="text-indigo-600">Scan</span> Diagnosis
         </h2>
-        <p className="text-gray-600 mb-6 text-center lg:text-left leading-relaxed">
+        <p className="text-gray-600 mb-6 text-center lg:text-left leading-relaxed text-sm">
           Enter your symptoms below, adding one at a time (press Enter or
           comma). Click a symptom tag to remove it or select from suggestions.
         </p>
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-6"
+          className="space-y-4"
           aria-describedby="live-region"
         >
           <label
             htmlFor="symptoms-input"
-            className="block text-sm font-medium text-gray-800 mb-2"
+            className="block text-sm font-medium text-gray-800"
           >
             Your Symptoms
           </label>
 
-          {/* Symptom tags */}
           <div
-            className="flex flex-wrap gap-2 mb-2"
+            className="flex flex-wrap gap-2 mb-2 min-h-[40px]"
             aria-live="polite"
             aria-relevant="additions removals"
           >
             {symptoms.length === 0 && (
-              <p className="text-gray-400 italic">No symptoms added yet.</p>
+              <p className="text-gray-400 italic text-sm">
+                No symptoms added yet.
+              </p>
             )}
             {symptoms.map((symptom) => (
               <button
                 key={symptom}
                 type="button"
                 onClick={() => removeSymptom(symptom)}
-                className="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="bg-indigo-600 text-white px-2 py-1 rounded-full text-xs shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 aria-label={`Remove symptom ${symptom}`}
                 title="Click to remove"
               >
@@ -207,7 +207,6 @@ function SymScanPredictor() {
             ))}
           </div>
 
-          {/* Symptom input with suggestions */}
           <div className="relative">
             <input
               type="text"
@@ -216,7 +215,7 @@ function SymScanPredictor() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Type symptom and press Enter or comma"
-              className="block w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               disabled={loading}
               aria-describedby="symptoms-help"
               aria-autocomplete="list"
@@ -237,13 +236,13 @@ function SymScanPredictor() {
                     key={suggestion}
                     role="option"
                     aria-selected={index === activeSuggestionIndex}
-                    className={`cursor-pointer px-4 py-2 ${
+                    className={`cursor-pointer px-3 py-2 text-sm ${
                       index === activeSuggestionIndex
                         ? "bg-indigo-600 text-white"
                         : "text-gray-700"
                     } hover:bg-indigo-500 hover:text-white`}
                     onMouseDown={(e) => {
-                      e.preventDefault(); // Prevent input blur
+                      e.preventDefault();
                       addSymptom(suggestion);
                     }}
                   >
@@ -254,7 +253,7 @@ function SymScanPredictor() {
             )}
           </div>
 
-          <p id="symptoms-help" className="text-gray-500 text-sm">
+          <p id="symptoms-help" className="text-gray-500 text-xs">
             Add symptoms one by one. Remove any by clicking on them.
           </p>
 
@@ -262,7 +261,7 @@ function SymScanPredictor() {
             <button
               type="button"
               onClick={clearSymptoms}
-              className="text-sm text-red-600 hover:text-red-800 focus:outline-none"
+              className="text-xs text-red-600 hover:text-red-800 focus:outline-none"
             >
               Clear All Symptoms
             </button>
@@ -270,7 +269,7 @@ function SymScanPredictor() {
 
           <button
             type="submit"
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-lg font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center py-2 px-3 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={loading}
             aria-busy={loading}
           >
@@ -300,7 +299,6 @@ function SymScanPredictor() {
             )}
           </button>
 
-          {/* ARIA live region for announcements */}
           <div
             aria-live="polite"
             aria-atomic="true"
@@ -311,11 +309,11 @@ function SymScanPredictor() {
         </form>
       </div>
 
-      {/* Result Section */}
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full lg:w-1/2 max-w-xl">
+      {/* Result Section - using `max-w-md` for consistency */}
+      <div className="bg-white p-8 rounded-xl shadow-2xl w-full lg:w-1/2 max-w-md">
         {error && (
           <div
-            className="p-4 bg-red-50 border border-red-300 text-red-800 rounded-lg text-sm transition-all duration-300 ease-in-out"
+            className="p-4 bg-red-50 border border-red-300 text-red-800 rounded-lg text-xs transition-all duration-300 ease-in-out"
             role="alert"
             aria-live="assertive"
           >
@@ -327,7 +325,7 @@ function SymScanPredictor() {
         {!predictionResult && !error && !loading && (
           <div className="p-6 text-center text-gray-500">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400"
+              className="mx-auto h-10 w-10 text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -340,7 +338,7 @@ function SymScanPredictor() {
                 d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               ></path>
             </svg>
-            <p className="mt-2 text-lg">
+            <p className="mt-2 text-base">
               Your diagnosis results will appear here.
             </p>
           </div>
@@ -349,7 +347,7 @@ function SymScanPredictor() {
         {loading && (
           <div className="flex flex-col items-center justify-center p-6 text-indigo-600">
             <svg
-              className="animate-spin h-10 w-10 text-indigo-600 mb-3"
+              className="animate-spin h-8 w-8 text-indigo-600 mb-2"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -368,15 +366,14 @@ function SymScanPredictor() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               ></path>
             </svg>
-            <p className="text-lg font-semibold">Analyzing symptoms...</p>
+            <p className="text-base font-semibold">Analyzing symptoms...</p>
           </div>
         )}
 
         {predictionResult && (
-          <div className="transition-all duration-300 ease-in-out">
-            {/* Display backend error if any */}
+          <div className="transition-all duration-300 ease-in-out text-sm">
             {predictionResult.error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md text-sm">
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md text-xs">
                 <p className="font-semibold mb-1">Backend Reported Error:</p>
                 <p>{predictionResult.error}</p>
                 {predictionResult.details && (
@@ -387,8 +384,7 @@ function SymScanPredictor() {
               </div>
             )}
 
-            {/* Primary Disease with Confidence */}
-            <p className="mb-3 text-2xl font-extrabold text-indigo-700">
+            <p className="mb-3 text-xl font-extrabold text-indigo-700">
               Predicted Primary Disease:{" "}
               <span className="text-black">
                 {predictionResult.predicted_disease || "N/A"}
@@ -404,14 +400,13 @@ function SymScanPredictor() {
                 )}
             </p>
 
-            {/* Other top predictions */}
             {predictionResult.top_n_predictions &&
               predictionResult.top_n_predictions.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 pt-4">
-                  <h4 className="font-bold text-gray-800 text-lg mb-2">
+                  <h4 className="font-bold text-gray-800 text-base mb-2">
                     Other Top Possibilities:
                   </h4>
-                  <ul className="list-disc list-inside space-y-1 text-gray-700 max-h-48 overflow-auto">
+                  <ul className="list-disc list-inside space-y-1 text-gray-700 max-h-36 overflow-auto">
                     {predictionResult.top_n_predictions.map((p, index) => (
                       <li key={index} className="text-sm">
                         <span className="font-semibold">{p.disease}</span>{" "}
@@ -422,11 +417,10 @@ function SymScanPredictor() {
                 </div>
               )}
 
-            {/* Recommended Precautions */}
             {predictionResult.precautions &&
               predictionResult.precautions.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 pt-4">
-                  <h4 className="font-bold text-gray-800 text-lg mb-2">
+                  <h4 className="font-bold text-gray-800 text-base mb-2">
                     Recommended Precautions:
                   </h4>
                   <ul className="list-disc list-inside space-y-1 text-gray-700">
@@ -439,14 +433,13 @@ function SymScanPredictor() {
                 </div>
               )}
 
-            {/* Symptoms used */}
             {predictionResult.normalized_symptoms_used_by_model &&
               predictionResult.normalized_symptoms_used_by_model.length > 0 && (
                 <div className="mt-4 border-t border-gray-200 pt-4">
-                  <h4 className="font-bold text-gray-800 text-lg mb-2">
+                  <h4 className="font-bold text-gray-800 text-base mb-2">
                     Symptoms Used by Model:
                   </h4>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-xs text-gray-700">
                     {predictionResult.normalized_symptoms_used_by_model.join(
                       ", "
                     )}
@@ -454,11 +447,10 @@ function SymScanPredictor() {
                 </div>
               )}
 
-            {/* Unrecognized symptoms with tooltip */}
             {predictionResult.unrecognized_symptoms &&
               predictionResult.unrecognized_symptoms.length > 0 && (
                 <div
-                  className="mt-6 p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-sm text-yellow-800"
+                  className="mt-6 p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-xs text-yellow-800"
                   role="note"
                   aria-live="polite"
                 >
@@ -482,7 +474,6 @@ function SymScanPredictor() {
                 </div>
               )}
 
-            {/* Medical disclaimer */}
             <p className="mt-6 text-xs text-gray-500 italic text-center leading-relaxed">
               <span className="font-semibold">Disclaimer:</span>{" "}
               {predictionResult.medical_disclaimer ||
