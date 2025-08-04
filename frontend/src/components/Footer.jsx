@@ -45,7 +45,7 @@ const Footer = () => {
           <div className="space-y-3">
             <h3 className="text-lg font-bold text-white mb-3">Services</h3>
             <ul className="space-y-1.5">
-              <li>
+              {/* <li>
                 <Link
                   to="/conditions"
                   className="hover:text-white transition text-sm"
@@ -60,7 +60,7 @@ const Footer = () => {
                 >
                   Make Appointment
                 </Link>
-              </li>
+              </li> */}
               <li>
                 <Link
                   to="/doctors"
@@ -113,7 +113,7 @@ const Footer = () => {
                   FAQs
                 </Link>
               </li>
-              <li>
+              {/* <li>
                 <Link
                   to="/careers"
                   className="hover:text-white transition text-sm"
@@ -128,7 +128,7 @@ const Footer = () => {
                 >
                   Patient Stories
                 </Link>
-              </li>
+              </li> */}
             </ul>
           </div>
 
