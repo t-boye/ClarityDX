@@ -4,15 +4,17 @@ from flask_cors import CORS
 import os
 import pandas as pd
 from pydantic import BaseModel, Field, ValidationError, conint, confloat
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict, Any
 import re
 import requests
 import tempfile
 import shutil
 import joblib
+import tensorflow as tf
+import numpy as np
+from io import BytesIO
 
 # --- Define PROJECT_ROOT explicitly for app.py ---
-# This assumes app.py is in 'backend' folder, and project root is one level up
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # --- Import db and migrate from your extensions.py ---
@@ -28,13 +30,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # --- Import prediction modules ---
+# The old import for EnhancedHeartDiseaseDiagnosticSystem is removed.
+# The new predict_symscan function is imported.
 from prediction.malaria_prediction import predict_malaria
 from prediction.ckd_prediction import predict_ckd
-from prediction.heart_disease_prediction import EnhancedHeartDiseaseDiagnosticSystem
+from prediction.heart_disease_prediction import predict_heart_disease
 from prediction.hepatitis_c_prediction import predict_hepatitis_c
+from prediction.sysscan_prediction import predict_symscan
 
 # --- Import MODEL_URLS from model_config.py ---
 from model_config import MODEL_URLS
+# --- Import image processing service function ---
+from services.image_processing_service import process_image as process_malaria_image_data
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -76,26 +83,43 @@ from errors import DatabaseError, PatientNotFoundError, EncounterNotFoundError, 
 from patient_encounter_routes import patient_encounter_bp
 app.register_blueprint(patient_encounter_bp)
 
-# --- Image processing blueprint modification note ---
-# Assuming your routes/image_processing.py has a blueprint named image_bp.
-# Ensure that within that blueprint, you validate 'file' in request.files,
-# return 400 if missing, and handle image reading/processing safely.
-from routes.image_processing import image_bp
-app.register_blueprint(image_bp, url_prefix="/api/image-processing")
-
-# Initialize the Heart Disease Diagnostic System globally
-heart_disease_diagnoser = EnhancedHeartDiseaseDiagnosticSystem()
+# --- ================================================================================================== --- #
+# --- Centralized Model and Artifact Loading Logic ---
+# --- ================================================================================================== --- #
 
 # --- Global dictionary to hold all loaded models and auxiliary data ---
-loaded_models = {}
+loaded_models: Dict[str, Any] = {}
 
-# --- Helper functions for downloading and loading models from URLs ---
+def download_and_load_joblib(url: str) -> Any:
+    """Fetches a joblib artifact from a URL and loads it directly into memory."""
+    try:
+        logger.info(f"Fetching joblib artifact from {url}")
+        response = requests.get(url)
+        response.raise_for_status()
+        return joblib.load(BytesIO(response.content))
+    except Exception as e:
+        logger.error(f"Failed to load artifact from {url}: {e}")
+        return None
+
+def download_and_load_tensorflow(url: str, temp_dir: str) -> Optional[tf.keras.Model]:
+    """Downloads a TensorFlow model from a URL and loads it from a temporary path."""
+    temp_path = os.path.join(temp_dir, os.path.basename(url))
+    if not download_file(url, temp_path):
+        return None
+    
+    try:
+        model = tf.keras.models.load_model(temp_path)
+        return model
+    except Exception as e:
+        logger.error(f"Error loading TensorFlow model from {temp_path}: {e}")
+        return None
+    
 def download_file(url, local_path):
     """Downloads a file from a given URL to a local path."""
     logger.info(f"Attempting to download {url} to {local_path}")
     try:
         with requests.get(url, stream=True) as r:
-            r.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+            r.raise_for_status()
             with open(local_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
@@ -108,56 +132,36 @@ def download_file(url, local_path):
         logger.error(f"Failed to write file {local_path}: {e}")
         return False
 
-def load_single_model_file(model_name: str, url: str, temp_dir: str):
-    """Downloads and loads a single model file (e.g., .pkl) from a URL."""
-    file_name = os.path.basename(url)
-    local_file_path = os.path.join(temp_dir, file_name)
-
-    if not download_file(url, local_file_path):
-        logger.error(f"Could not download {model_name} from {url}.")
-        return None
-
-    try:
-        # Determine how to load based on file extension or known type
-        if file_name.endswith('.pkl'):
-            model = joblib.load(local_file_path)
-            logger.info(f"Successfully loaded {model_name} from {local_file_path}")
-            return model
-        # Add other file types (e.g., .h5 for Keras/TF, .bin for fastText) here if needed
-        else:
-            logger.error(f"Unsupported file type for {model_name}: {file_name}. Only .pkl is supported for now.")
-            return None
-    except Exception as e:
-        logger.error(f"Error loading {model_name} from {local_file_path}: {e}")
-        return None
-
 def initialize_all_models():
     """Initializes all models and auxiliary data from their configured URLs."""
     global loaded_models
     temp_dir = None
     try:
-        # Create a temporary directory for downloaded models
         temp_dir = tempfile.mkdtemp()
         logger.info(f"Created temporary directory for models: {temp_dir}")
 
         for model_key, model_url in MODEL_URLS.items():
-            logger.info(f"Initializing {model_key} from {model_url}...")
-            # For simplicity, assuming all are single .pkl files for SymScan related assets
-            loaded_obj = load_single_model_file(model_key, model_url, temp_dir)
+            if model_url.endswith(('.pkl', '.joblib')):
+                loaded_obj = download_and_load_joblib(model_url)
+            elif model_url.endswith(('.h5', '.keras', '.tflite')):
+                loaded_obj = download_and_load_tensorflow(model_url, temp_dir)
+            else:
+                logger.warning(f"Unsupported file extension for model {model_key}. Skipping.")
+                continue
+
             if loaded_obj is not None:
                 loaded_models[model_key] = loaded_obj
+                logger.info(f"Successfully loaded {model_key}.")
             else:
-                logger.error(f"Failed to load {model_key}. Its functionality may be impaired.")
+                logger.error(f"Failed to load {model_key}. Functionality may be impaired.")
 
         if not loaded_models:
             logger.error("No models were loaded. Check MODEL_URLS and network connectivity.")
 
     except Exception as e:
         logger.critical(f"Fatal error during model initialization: {e}")
-        # Clear loaded models if initialization fails critically
         loaded_models = {}
     finally:
-        # Clean up the temporary directory after loading
         if temp_dir and os.path.exists(temp_dir):
             try:
                 shutil.rmtree(temp_dir)
@@ -169,24 +173,23 @@ def initialize_all_models():
 with app.app_context():
     initialize_all_models()
 
-# --- NLTK Setup: Add BOTH backend/nltk_data and backend/venv/nltk_data to NLTK_DATA path ---
+# --- ================================================================================================== --- #
+# --- NLTK Setup ---
+# This part remains the same as it's a prerequisite for SymScan processing
+# --- ================================================================================================== --- #
+
 import nltk
 
 backend_dir = os.path.dirname(__file__)
-
-# Path 1: backend/nltk_data
 project_nltk_data = os.path.join(backend_dir, 'nltk_data')
-# Path 2: backend/venv/nltk_data
 venv_nltk_data = os.path.join(backend_dir, 'venv', 'nltk_data')
 
 for p in [project_nltk_data, venv_nltk_data]:
     if p not in nltk.data.path:
         nltk.data.path.insert(0, p)
 
-# Log the paths being used
 logger.info(f"NLTK data search paths: {nltk.data.path}")
 
-# Validate required corpora
 try:
     nltk.data.find('corpora/wordnet')
     nltk.data.find('corpora/omw-1.4')
@@ -194,44 +197,16 @@ try:
     nltk.data.find('tokenizers/punkt')
     logger.info("✅ All required NLTK data found.")
 except LookupError as e:
-    logger.error(
-        f"❌ Missing required NLTK data: {e}\n"
-        f"👉 Run `python setup_env.py` to download them into both locations."
-    )
-    # This might cause issues if NLTK functions are called later without the data
-    # Consider raising an error or marking NLTK-dependent features as unavailable
+    logger.error(f"❌ Missing required NLTK data: {e}\n"
+                 f"👉 Run `python setup_env.py` to download them into both locations.")
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-
 lemmatizer = WordNetLemmatizer()
 stop_words = set(stopwords.words('english'))
 
-# SYMPTOM_SYNONYMS dictionary removed as requested
-
-def clean_text_api(text):
-    if pd.isna(text):
-        return None
-    text = str(text).lower()
-    text = re.sub(r'[^a-z0-9\s]', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-def lemmatize_and_remove_stopwords_api(text: str):
-    tokens = nltk.word_tokenize(text)
-    tokens = [lemmatizer.lemmatize(t) for t in tokens if t not in stop_words]
-    return ' '.join(tokens)
-
-def normalize_symptom_name_api(symptom_name):
-    if not symptom_name:
-        return None
-    cleaned = clean_text_api(symptom_name.replace('_', ' '))
-    if not cleaned:
-        return None
-    # Removed: return SYMPTOM_SYNONYMS.get(lemmatized, lemmatized)
-    return lemmatize_and_remove_stopwords_api(cleaned) 
-
-# --- =================  --- #
+# Pydantic models remain the same
+# --- =================  --- #
 #===== Pydantic models ======#
 
 class HepatitisCData(BaseModel):
@@ -252,7 +227,6 @@ class HepatitisCData(BaseModel):
     AgeGroup_Old: int = Field(..., alias="AgeGroup_Old")
 
 class HeartDiseaseData(BaseModel):
-    # Corrected: Expect 'age' (lowercase) to match the frontend
     age: float = Field(..., description="Age in years")
     sex: float = Field(..., description="Sex (1 = male; 0 = female)")
     cp: float = Field(..., description="Chest Pain Type (0-3)")
@@ -266,7 +240,6 @@ class HeartDiseaseData(BaseModel):
     slope: float = Field(..., description="Slope of the peak exercise ST segment")
     ca: float = Field(..., description="Number of major vessels (0-3) colored by flourosopy")
     thal: float = Field(..., description="Thalassemia (1 = fixed defect; 2 = normal; 3 = reversible defect)")
-
 
 class CKDData(BaseModel):
     age_yrs: Optional[conint(ge=0)] = Field(default=None, alias="Age (yrs)")
@@ -297,12 +270,33 @@ class CKDData(BaseModel):
 class SymScanData(BaseModel):
     symptoms: List[str] = Field(..., min_length=1, description="List of symptoms.")
 
-# SymScan config
-MIN_CONFIDENCE_THRESHOLD = 0.50
-TOP_N_PREDICTIONS = 3
+# --- ================================================================================================== --- #
+# --- API Endpoints ---
+# --- ================================================================================================== --- #
+
+@app.route('/api/image-processing/process-image', methods=['POST'])
+def process_malaria_image():
+    """
+    Endpoint for processing an uploaded image for malaria diagnosis.
+    This route calls the dedicated malaria prediction logic.
+    """
+    try:
+        response, status_code = predict_malaria(
+            models=loaded_models,
+            process_image=process_malaria_image_data
+        )
+        return response, status_code
+
+    except Exception as e:
+        logger.exception(f"Unhandled error in image processing endpoint: {e}")
+        return jsonify({
+            "error": "Internal server error.",
+            "details": str(e),
+            "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."
+        }), 500
 
 @app.route('/api/predict/<disease>', methods=['POST'])
-def predict(disease):
+def predict(disease: str):
     logger.info(f"Received prediction request for disease: {disease}")
     try:
         raw_json = request.get_json()
@@ -310,190 +304,84 @@ def predict(disease):
             logger.error("No JSON input provided for prediction.")
             return jsonify({"error": "No JSON input provided", "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 400
 
-        if disease == "malaria":
-            try:
-                # If predict_malaria expects a dict, pass raw_json, but ideally, it should be validated.
-                prediction_results = predict_malaria(raw_json)
-                return jsonify(prediction_results)
-            except Exception as e:
-                logger.exception(f"Error in Malaria prediction: {e}")
-                return jsonify({"error": "Internal error during Malaria prediction.", "details": str(e), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 500
-
-        elif disease == "ckd":
-            try:
-                validated_data = CKDData(**raw_json).model_dump(by_alias=True)
-                prediction_results = predict_ckd(validated_data)
-                return jsonify(prediction_results)
-            except ValidationError as e:
-                logger.error(f"CKD validation error: {e.errors()}")
-                return jsonify({"error": "Invalid input format for CKD", "details": e.errors(), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 400
-            except Exception as e:
-                logger.exception(f"Error in CKD prediction: {e}")
-                return jsonify({"error": "Internal error during CKD prediction.", "details": str(e), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 500
-
-        elif disease == "heart_disease":
+        # --- Heart Disease Prediction ---
+        if disease == "heart_disease":
             try:
                 # Pydantic will now correctly expect 'age' (lowercase)
-                validated_numerical_data = HeartDiseaseData(**raw_json).model_dump() # .model_dump() by default uses field names
-                logger.info(f"Starting hybrid prediction for patient data: {validated_numerical_data}")
+                validated_numerical_data = HeartDiseaseData(**raw_json).model_dump()
+                
+                heart_disease_models = {
+                    'rf_model': loaded_models.get('heart_disease_rf_model'),
+                    'scaler': loaded_models.get('heart_disease_scaler'),
+                    'feature_names': loaded_models.get('heart_disease_feature_names')
+                }
+                
+                # Check for missing models
+                if not all(heart_disease_models.values()):
+                     logger.error("Heart Disease model artifacts not loaded. Returning 503.")
+                     return jsonify({"error": "Heart Disease model not available.", "medical_disclaimer": "..."}), 503
 
-                # Ensure the prediction function converts custom objects (like RiskLevel) to strings
-                result = heart_disease_diagnoser.predict_with_hybrid_approach(validated_numerical_data)
-
-                # Ensure result is JSON serializable, especially if RiskLevel was used
-                if "risk_level" in result and hasattr(result["risk_level"], 'value'):
-                    result["risk_level"] = result["risk_level"].value # Convert enum to string
-
-                if "error" in result:
-                    logger.error(f"Heart Disease prediction error: {result['details']}")
-                    return jsonify(result), 400
+                result = predict_heart_disease(validated_numerical_data, heart_disease_models)
                 return jsonify(result)
             except ValidationError as e:
                 logger.error(f"Heart Disease validation error: {e.errors()}")
-                return jsonify({"error": "Invalid input format for Heart Disease", "details": e.errors(), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 400
+                return jsonify({"error": "Invalid input format for Heart Disease", "details": e.errors(), "medical_disclaimer": "..."}), 400
             except Exception as e:
                 logger.exception(f"Error in Heart Disease prediction: {e}")
-                return jsonify({"error": "Internal error during Heart Disease prediction.", "details": str(e), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 500
+                return jsonify({"error": "Internal error during Heart Disease prediction.", "details": str(e), "medical_disclaimer": "..."}), 500
+
+        # --- SymScan Prediction ---
+        elif disease == "symscan":
+            try:
+                # Pydantic validation is handled by the SymScan function internally
+                validated_data = SymScanData(**raw_json).model_dump()
+                user_symptoms = validated_data.get('symptoms')
+                
+                symscan_models = {
+                    'symscan_model': loaded_models.get('symscan_sympton_classifier_model'),
+                    'unique_symptoms': loaded_models.get('symscan_unique_symptoms'),
+                    'int_to_disease_map': loaded_models.get('symscan_int_to_disease_map'),
+                    'precautions_map': loaded_models.get('symscan_precautions_map')
+                }
+                
+                # Check for missing models
+                if not all(symscan_models.values()):
+                     logger.error("SymScan model artifacts not loaded. Returning 503.")
+                     return jsonify({"error": "SymScan model not available.", "medical_disclaimer": "..."}), 503
+                     
+                result = predict_symscan(user_symptoms, symscan_models)
+                return jsonify(result)
+            except ValidationError as e:
+                logger.error(f"SymScan validation error: {e.errors()}")
+                return jsonify({"error": "Invalid input format for SymScan prediction", "details": e.errors(), "medical_disclaimer": "..."}), 400
+            except Exception as e:
+                logger.exception(f"SymScan prediction error: {e}")
+                return jsonify({"error": "Internal error during SymScan prediction", "details": str(e), "medical_disclaimer": "..."}), 500
+
+        # --- Other Diseases (CKD, Hepatitis C) ---
+        elif disease == "ckd":
+            try:
+                validated_data = CKDData(**raw_json).model_dump(by_alias=True)
+                prediction_results = predict_ckd(validated_data, loaded_models)
+                return jsonify(prediction_results)
+            except ValidationError as e:
+                logger.error(f"CKD validation error: {e.errors()}")
+                return jsonify({"error": "Invalid input format for CKD", "details": e.errors(), "medical_disclaimer": "..."}), 400
+            except Exception as e:
+                logger.exception(f"Error in CKD prediction: {e}")
+                return jsonify({"error": "Internal error during CKD prediction.", "details": str(e), "medical_disclaimer": "..."}), 500
 
         elif disease == "hepatitis_c":
             try:
                 validated_data = HepatitisCData(**raw_json).model_dump(by_alias=True)
-                prediction_results = predict_hepatitis_c(validated_data)
+                prediction_results = predict_hepatitis_c(validated_data, loaded_models)
                 return jsonify(prediction_results)
             except ValidationError as e:
                 logger.error(f"Hepatitis C validation error: {e.errors()}")
-                return jsonify({"error": "Invalid input format for Hepatitis C", "details": e.errors(), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 400
+                return jsonify({"error": "Invalid input format for Hepatitis C", "details": e.errors(), "medical_disclaimer": "..."}), 400
             except Exception as e:
                 logger.exception(f"Error in Hepatitis C prediction: {e}")
-                return jsonify({"error": "Internal error during Hepatitis C prediction.", "details": str(e), "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 500
-
-        elif disease == "symscan":
-            try:
-                # Retrieve models and data from the global loaded_models dictionary
-                symscan_classifier = loaded_models.get("symScan_sympton_classifier_model")
-                symscan_unique_symptoms = loaded_models.get("symScan_unique_symptoms")
-                # symscan_unique_diseases is not directly used for the column names or mapping, but can be useful
-                # symscan_unique_diseases = loaded_models.get("symScan_unique_diseases")
-                symscan_int_to_disease = loaded_models.get("symScan_int_to_disease_map")
-                symscan_precautions_map = loaded_models.get("symScan_precautions_map")
-
-                # Check if models are loaded before proceeding
-                if None in [symscan_classifier, symscan_unique_symptoms, symscan_int_to_disease, symscan_precautions_map]:
-                    logger.error("SymScan model or auxiliary data not loaded. Returning 503.")
-                    return jsonify({
-                        "error": "SymScan model not available. Please contact support or try again later.",
-                        "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."
-                    }), 503
-
-                symscan_input = SymScanData(**raw_json)
-                user_symptoms_raw = symscan_input.symptoms
-
-                logger.info(f"SymScan: Received raw symptoms: {user_symptoms_raw}")
-
-                normalized_user_symptoms_used = set()
-                unrecognized_symptoms_list = []
-
-                for sym_raw in user_symptoms_raw:
-                    normalized_sym = normalize_symptom_name_api(sym_raw)
-                    if normalized_sym:
-                        if normalized_sym in symscan_unique_symptoms:
-                            normalized_user_symptoms_used.add(normalized_sym)
-                        else:
-                            unrecognized_symptoms_list.append(f"'{sym_raw}' (normalized to '{normalized_sym}' but not in model vocabulary)")
-                            logger.warning(f"SymScan: Symptom '{sym_raw}' normalized to '{normalized_sym}' not in training vocabulary.")
-                    else:
-                        unrecognized_symptoms_list.append(f"'{sym_raw}' (could not be normalized)")
-                        logger.warning(f"SymScan: Could not normalize symptom: '{sym_raw}'")
-
-                if not normalized_user_symptoms_used:
-                    return jsonify({
-                        "error": "No recognizable symptoms provided after normalization. Please provide valid symptoms.",
-                        "provided_symptoms": user_symptoms_raw,
-                        "unrecognized_symptoms": unrecognized_symptoms_list,
-                        "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."
-                    }), 400
-
-                logger.info(f"SymScan: Normalized symptoms used for prediction: {normalized_user_symptoms_used}")
-
-                input_vector = [1 if symptom in normalized_user_symptoms_used else 0 for symptom in symscan_unique_symptoms]
-                input_df = pd.DataFrame([input_vector], columns=symscan_unique_symptoms)
-
-                prediction_label_int = symscan_classifier.predict(input_df)[0]
-                primary_predicted_disease = symscan_int_to_disease.get(prediction_label_int, "Unknown Disease")
-
-                prediction_proba_array = None
-                try:
-                    prediction_proba_array = symscan_classifier.predict_proba(input_df)[0]
-                except AttributeError:
-                    logger.warning("SymScan classifier missing predict_proba, confidence unavailable.")
-
-                primary_confidence = prediction_proba_array[prediction_label_int] if prediction_proba_array is not None else None
-
-                if primary_confidence is not None and primary_confidence < MIN_CONFIDENCE_THRESHOLD:
-                    primary_predicted_disease = "Uncertain Diagnosis"
-                    logger.info(f"SymScan: Primary prediction confidence {primary_confidence:.4f} below threshold {MIN_CONFIDENCE_THRESHOLD}.")
-
-                top_predictions = []
-                if prediction_proba_array is not None:
-                    # Get indices of top N predictions
-                    # Assuming symscan_unique_diseases list from model_config.py or directly from int_to_disease map keys
-                    # For correct ordering, it's crucial that symscan_int_to_disease maps to the correct indices
-                    all_diseases_sorted_by_index = [symscan_int_to_disease[i] for i in sorted(symscan_int_to_disease.keys())]
-
-                    if all_diseases_sorted_by_index and len(prediction_proba_array) == len(all_diseases_sorted_by_index):
-                        # Create a list of (confidence, index) pairs, sort, and take top N
-                        sorted_predictions = sorted(
-                            [(prob, i) for i, prob in enumerate(prediction_proba_array)],
-                            key=lambda item: item[0], reverse=True
-                        )[:TOP_N_PREDICTIONS]
-
-                        for conf, idx in sorted_predictions:
-                            disease_name = symscan_int_to_disease.get(idx, "Unknown Disease")
-                            top_predictions.append({
-                                "disease": disease_name,
-                                "confidence": f"{conf:.4f}"
-                            })
-                    else:
-                        logger.warning("SymScan: Cannot determine top N predictions, unique diseases list mismatch or missing.")
-                elif primary_predicted_disease != "Uncertain Diagnosis":
-                    top_predictions.append({
-                        "disease": primary_predicted_disease,
-                        "confidence": "N/A"
-                    })
-
-                if primary_predicted_disease != "Uncertain Diagnosis":
-                    precautions = symscan_precautions_map.get(primary_predicted_disease, ["No specific precautions found for this disease."])
-                else:
-                    precautions = ["Diagnosis is uncertain. It is highly recommended to consult a medical professional for a proper diagnosis and treatment plan."]
-
-                response_data = {
-                    "predicted_disease": primary_predicted_disease,
-                    "confidence_for_primary_prediction": f"{primary_confidence:.4f}" if primary_confidence is not None else "N/A",
-                    "top_n_predictions": top_predictions,
-                    "precautions": precautions,
-                    "provided_raw_symptoms": user_symptoms_raw,
-                    "normalized_symptoms_used_by_model": sorted(list(normalized_user_symptoms_used)),
-                    "unrecognized_symptoms": unrecognized_symptoms_list,
-                    "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."
-                }
-
-                logger.info(f"SymScan prediction response: {response_data}")
-                return jsonify(response_data)
-
-            except ValidationError as e:
-                logger.error(f"SymScan input validation error: {e.errors()}")
-                return jsonify({
-                    "error": "Invalid input format for SymScan prediction",
-                    "details": e.errors(),
-                    "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."
-                }), 400
-            except Exception as e:
-                logger.exception(f"SymScan prediction error: {e}")
-                return jsonify({
-                    "error": "Internal error during SymScan prediction",
-                    "details": str(e),
-                    "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."
-                }), 500
+                return jsonify({"error": "Internal error during Hepatitis C prediction.", "details": str(e), "medical_disclaimer": "..."}), 500
 
         else:
             logger.warning(f"Unsupported disease type requested: {disease}")

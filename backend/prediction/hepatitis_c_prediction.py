@@ -1,180 +1,23 @@
 import pandas as pd
 import numpy as np
-import os
-import joblib
-import shutil
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, roc_auc_score
-from enum import Enum
-from io import BytesIO
 import logging
+from enum import Enum
 from typing import Dict, Any, Union, List, Optional
-import tempfile
 import requests
+import joblib
+from io import BytesIO
 
 # Try to import TensorFlow, provide helpful error if not installed
 try:
-    from tensorflow.keras.models import load_model as keras_load_model
     from tensorflow import keras
     _tensorflow_available = True
 except ImportError:
     _tensorflow_available = False
-    print("Warning: TensorFlow not found. Some ML model predictions will be skipped.")
+    print("Warning: TensorFlow not found. The TensorFlow model prediction will be skipped.")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Define the base URL for the Hepatitis C model artifacts
-HEPATITIS_C_BASE_URL = "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/hepatitis_c_model/"
-
-# Get environment variables for all remote model artifact URLs, with fallbacks to the S3 paths
-HEPATITIS_C_SCALER_URL = os.getenv("HEPATITIS_C_SCALER_URL", f"{HEPATITIS_C_BASE_URL}hepatitis_c_scaler.pkl")
-HEPATITIS_C_RF_MODEL_URL = os.getenv("HEPATITIS_C_RF_MODEL_URL", f"{HEPATITIS_C_BASE_URL}random_forest_model.pkl")
-HEPATITIS_C_FEATURE_NAMES_URL = os.getenv("HEPATITIS_C_FEATURE_NAMES_URL", f"{HEPATITIS_C_BASE_URL}hepatitis_c_feature_names.pkl")
-HEPATITIS_C_TF_MODEL_URL = os.getenv("HEPATITIS_C_TF_MODEL_URL", f"{HEPATITIS_C_BASE_URL}hepatitis_c_model.tf/")
-
-# Global instances
-hepatitis_c_scaler = None
-hepatitis_c_rf_model = None
-hepatitis_c_tf_model = None
-hepatitis_c_feature_names = None
-
-def load_joblib_from_url(url: str):
-    """
-    Fetches a joblib artifact from a URL and loads it directly into memory.
-    """
-    if not url:
-        raise ValueError("URL for joblib artifact is not set.")
-    try:
-        logger.info(f"Fetching joblib artifact from {url}")
-        response = requests.get(url)
-        response.raise_for_status()
-        return joblib.load(BytesIO(response.content))
-    except Exception as e:
-        logger.error(f"Failed to load artifact from {url}: {e}")
-        raise RuntimeError(f"Failed to load model artifact from URL: {url}") from e
-
-def load_tensorflow_saved_model_from_url(base_url: str):
-    """
-    Loads a TensorFlow SavedModel from a remote URL. This requires downloading
-    the model's directory structure to a temporary location.
-    """
-    if not base_url:
-        raise ValueError("Base URL for TensorFlow SavedModel is not set.")
-    
-    if not _tensorflow_available:
-        raise RuntimeError("TensorFlow not available. Cannot load SavedModel.")
-
-    # Define the list of files to download based on the SavedModel format
-    files_to_download = [
-        "fingerprint.pb",
-        "keras_metadata.pb",
-        "saved_model.pb",
-        "variables/variables.data-00000-of-00001",
-        "variables/variables.index"
-    ]
-    
-    temp_dir = None
-    try:
-        temp_dir = tempfile.mkdtemp()
-        logger.info(f"Downloading TensorFlow SavedModel to temporary directory: {temp_dir}")
-        
-        for file_name in files_to_download:
-            url = f"{base_url}{file_name}"
-            local_path = os.path.join(temp_dir, file_name)
-            
-            # Create subdirectories if they don't exist
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            
-            logger.info(f"Downloading {url} to {local_path}")
-            response = requests.get(url)
-            response.raise_for_status()
-            with open(local_path, "wb") as f:
-                f.write(response.content)
-        
-        logger.info("All TensorFlow model files downloaded successfully.")
-        model = keras_load_model(temp_dir)
-        logger.info("TensorFlow SavedModel loaded into memory.")
-        return model
-
-    except Exception as e:
-        logger.error(f"Failed to load TensorFlow SavedModel from {base_url}: {e}")
-        raise RuntimeError(f"Failed to load TensorFlow model from URL: {base_url}") from e
-    finally:
-        if temp_dir and os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            logger.info(f"Removed temporary directory {temp_dir}")
-
-def load_hepatitis_c_artifacts():
-    """
-    Loads all Hepatitis C model artifacts directly from URLs into memory.
-    """
-    global hepatitis_c_scaler, hepatitis_c_rf_model, hepatitis_c_tf_model, hepatitis_c_feature_names
-
-    try:
-        # Load joblib artifacts
-        hepatitis_c_scaler = load_joblib_from_url(HEPATITIS_C_SCALER_URL)
-        hepatitis_c_rf_model = load_joblib_from_url(HEPATITIS_C_RF_MODEL_URL)
-        hepatitis_c_feature_names = load_joblib_from_url(HEPATITIS_C_FEATURE_NAMES_URL)
-
-        # Load TensorFlow model
-        hepatitis_c_tf_model = load_tensorflow_saved_model_from_url(HEPATITIS_C_TF_MODEL_URL)
-
-        logger.info("All Hepatitis C model artifacts loaded successfully from URLs.")
-    
-    except Exception as e:
-        logger.error(f"Failed to load Hepatitis C ML artifacts: {e}", exc_info=True)
-        # Reset globals to None if loading fails
-        hepatitis_c_scaler = None
-        hepatitis_c_rf_model = None
-        hepatitis_c_tf_model = None
-        hepatitis_c_feature_names = None
-        raise RuntimeError("Application startup failed due to missing or corrupt Hepatitis C model artifacts.") from e
-
-# Load artifacts once at import or app startup
-try:
-    load_hepatitis_c_artifacts()
-except RuntimeError as e:
-    logger.error(str(e))
-    # Note: Global variables remain None as set in the exception handler
-
-# The old 'if artifacts is not None:' block is removed.
-# The global variables are now managed directly by the load function.
-
-
-# You can then create a predict function that uses the loaded objects, for example:
-def predict_hepatitis_c(input_data: dict) -> dict:
-    # We now check the global variables directly
-    if hepatitis_c_tf_model is None or hepatitis_c_scaler is None:
-        logger.error("Model artifacts not loaded.")
-        return {"error": "Model artifacts not available", "status_code": 500}
-
-    try:
-        # preprocess input dict to DataFrame as needed
-        input_df = pd.DataFrame([input_data])
-        input_scaled = hepatitis_c_scaler.transform(input_df)
-        
-        # Use the TensorFlow model for prediction
-        # The output of the model is likely a single probability, but predict() returns an array
-        prediction_proba = hepatitis_c_tf_model.predict(input_scaled)[0][0] 
-        # The above line assumes a single output neuron for binary classification
-        
-        # We need to decide a class based on the probability, e.g., a threshold of 0.5
-        prediction = 1 if prediction_proba >= 0.5 else 0
-        
-        logger.info(f"Prediction: {prediction}, Probabilities: {prediction_proba}")
-        
-        return {
-            "prediction": prediction,
-            "probabilities": [1 - prediction_proba, prediction_proba],
-            "class_names": ["No Hepatitis C", "Hepatitis C"]
-        }
-    except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        return {"error": "Prediction failed", "status_code": 500}
 
 # Define feature columns for the ML model (must match training data)
 ML_FEATURES = [
@@ -201,15 +44,11 @@ class RiskLevel(Enum):
     HIGH = "High Risk"
     CRITICAL = "Critical Risk"
 
-# --- ML Model Management (Simulated for demonstration) ---
-# NOTE: The dummy model creation and loading logic is no longer needed
-# as we are now loading models from remote URLs.
-# I've removed this section to keep the code clean and focused on the
-# remote artifact loading strategy. If you need it for local development,
-# you would re-add it as a fallback.
-
 # --- Knowledge Base for Rule-Based System ---
 class HepatitisCKnowledgeBase:
+    """
+    A knowledge base containing normal reference ranges and helper methods.
+    """
     def __init__(self, normal_ranges):
         self.normal_ranges = normal_ranges
         logger.info("HepatitisCKnowledgeBase initialized.")
@@ -226,6 +65,9 @@ class HepatitisCKnowledgeBase:
 
 # --- Rule-Based System for General Liver Health Risk ---
 class HepatitisCRuleBasedSystem:
+    """
+    A rule-based expert system to evaluate a patient's general liver health risk.
+    """
     def __init__(self, knowledge_base):
         self.kb = knowledge_base
         logger.info("HepatitisCRuleBasedSystem initialized.")
@@ -234,6 +76,7 @@ class HepatitisCRuleBasedSystem:
         risk_score = 0.0
         evidence = []
         
+        # Safely get values with default fallbacks
         alt = patient_data.get('ALT', NORMAL_RANGES['ALT']['min'])
         ast = patient_data.get('AST', NORMAL_RANGES['AST']['min'])
         alp = patient_data.get('ALP', NORMAL_RANGES['ALP']['min'])
@@ -244,8 +87,7 @@ class HepatitisCRuleBasedSystem:
         alcohol_consumption = patient_data.get('AlcoholConsumption', 0)
         previous_conditions = patient_data.get('PreviousMedicalConditions', 0)
         family_history = patient_data.get('FamilyHistory', 0)
-        age = patient_data.get('Age', 40)
-
+        
         logger.debug(f"Evaluating general rules for patient data: {patient_data}")
 
         if self.kb.is_lft_elevated('ALT', alt):
@@ -309,6 +151,7 @@ class HepatitisCRuleBasedSystem:
         critical_risk_score = 0.0
         critical_evidence = []
 
+        # Safely get values with default fallbacks
         alt = patient_data.get('ALT', NORMAL_RANGES['ALT']['min'])
         ast = patient_data.get('AST', NORMAL_RANGES['AST']['min'])
         albumin = patient_data.get('Albumin', NORMAL_RANGES['Albumin']['max'])
@@ -365,29 +208,34 @@ class HepatitisCRuleBasedSystem:
 
 # --- Hybrid Diagnostic System ---
 class EnhancedHepatitisCDiagnosticSystem:
-    # Changed ML_MODEL and SCALER to class properties for clarity
-    def __init__(self, ml_model, scaler):
+    """
+    Combines an ML model prediction with a rule-based expert system for a comprehensive diagnosis.
+    """
+    def __init__(self, ml_model: Any, scaler: Any, ml_features: List[str]):
+        if ml_model is None or scaler is None or not ml_features:
+            raise ValueError("ML model, scaler, and feature names must be provided.")
         self.ml_model = ml_model
         self.scaler = scaler
+        self.ml_features = ml_features
         self.kb = HepatitisCKnowledgeBase(NORMAL_RANGES)
         self.rule_system = HepatitisCRuleBasedSystem(self.kb)
-        logger.info("EnhancedHepatitisCDiagnosticSystem initialized.")
+        logger.info("EnhancedHepatitisCDiagnosticSystem initialized with provided artifacts.")
 
     def _prepare_ml_features(self, patient_data: Dict[str, Any]) -> np.ndarray:
         features_dict = {}
-        for feature in ML_FEATURES:
+        for feature in self.ml_features:
             if feature == 'Gender':
                 features_dict[feature] = 1 if patient_data.get('Sex', '').lower() == 'male' else 0
             elif feature == 'HCV_RNA_Viral_Load':
                 if patient_data.get('HCV_RNA_Detected') and patient_data.get(feature) is None:
-                    features_dict[feature] = 10000
+                    features_dict[feature] = 10000 # Default viral load for detected but unspecified
                 else:
                     features_dict[feature] = patient_data.get(feature, 0)
             else:
                 features_dict[feature] = patient_data.get(feature, 0)
         
         features_df = pd.DataFrame([features_dict])
-        features_df = features_df[ML_FEATURES]
+        features_df = features_df[self.ml_features]
         
         scaled_data = self.scaler.transform(features_df)
         logger.debug(f"ML features prepared and scaled. Shape: {scaled_data.shape}")
@@ -436,11 +284,11 @@ class EnhancedHepatitisCDiagnosticSystem:
         # 1. Hepatitis C Detection (ML Model)
         processed_data_ml = self._prepare_ml_features(patient_data)
         
-        # Use the appropriate model based on availability (TensorFlow or RandomForest)
-        if self.ml_model == hepatitis_c_tf_model:
+        # Use the appropriate model based on its type (TensorFlow or Scikit-learn)
+        if _tensorflow_available and isinstance(self.ml_model, keras.Model):
             ml_prediction_proba = self.ml_model.predict(processed_data_ml)[0][0]
             ml_prediction_class = 1 if ml_prediction_proba >= 0.5 else 0
-        else: # Assumes RandomForest or another scikit-learn model
+        else: # Assumes scikit-learn model
             ml_prediction_proba = self.ml_model.predict_proba(processed_data_ml)[0][1]
             ml_prediction_class = self.ml_model.predict(processed_data_ml)[0]
 
@@ -491,32 +339,36 @@ class EnhancedHepatitisCDiagnosticSystem:
         logger.info("Diagnosis complete.")
         return results
 
-# --- Global instance of the diagnostic system ---
-# We instantiate this after loading the artifacts
-knowledge_base_global = HepatitisCKnowledgeBase(NORMAL_RANGES)
-rule_based_system_global = HepatitisCRuleBasedSystem(knowledge_base_global)
-
-# Use the loaded global artifacts to initialize the diagnostic system
-# We prioritize the TensorFlow model if available, otherwise use the RandomForest model
-if hepatitis_c_tf_model:
-    ml_model_to_use = hepatitis_c_tf_model
-else:
-    ml_model_to_use = hepatitis_c_rf_model
-
-hepatitis_c_diagnostic_system = EnhancedHepatitisCDiagnosticSystem(
-    ml_model=ml_model_to_use, 
-    scaler=hepatitis_c_scaler
-)
-
-# --- Expose the prediction function for app.py to import ---
-def predict_hepatitis_c(patient_data: Dict[str, Any]) -> Dict[str, Any]:
+# --- Main entry-point function for the new approach ---
+def predict_hepatitis_c(patient_data: Dict[str, Any], models: Dict[str, Any]) -> Dict[str, Any]:
     """
     Predicts Hepatitis C status and overall liver health risk using the hybrid diagnostic system.
-    This function is intended to be called by the Flask API.
+    This function is intended to be called by the main application, which provides the model artifacts.
+
+    Args:
+        patient_data (Dict[str, Any]): A dictionary containing patient data for diagnosis.
+        models (Dict[str, Any]): A dictionary containing all pre-loaded model artifacts.
+                                 Expected keys: 'rf_model' or 'tf_model', 'scaler', 'feature_names'.
+    
+    Returns:
+        Dict[str, Any]: A dictionary containing the diagnosis results, including ML prediction,
+                        rule-based risk, and a combined overall risk and recommendation.
     """
     try:
-        if hepatitis_c_diagnostic_system.ml_model is None or hepatitis_c_diagnostic_system.scaler is None:
-            raise RuntimeError("Hepatitis C model artifacts are not available.")
+        # Prioritize the TensorFlow model if available, otherwise use the RandomForest model
+        ml_model = models.get('tf_model') or models.get('rf_model')
+        scaler = models.get('scaler')
+        feature_names = models.get('feature_names')
+
+        if ml_model is None or scaler is None or feature_names is None:
+            raise RuntimeError("Required model artifacts (rf_model/tf_model, scaler, feature_names) are missing.")
+        
+        # Instantiate the diagnostic system with the provided artifacts
+        hepatitis_c_diagnostic_system = EnhancedHepatitisCDiagnosticSystem(
+            ml_model=ml_model,
+            scaler=scaler,
+            ml_features=feature_names
+        )
 
         diagnosis_results = hepatitis_c_diagnostic_system.diagnose(patient_data)
         return diagnosis_results
@@ -526,38 +378,66 @@ def predict_hepatitis_c(patient_data: Dict[str, Any]) -> Dict[str, Any]:
         return {"error": "Prediction failed", "details": str(e), "status_code": 500}
 
 # --- Main Execution Block (for direct testing of this script) ---
+# NOTE: This block is for demonstration only and simulates the main app.py file.
 if __name__ == "__main__":
     print("\n--- Running Diagnostic Test Cases for Hepatitis C Prediction ---")
+    
+    # We must simulate the models dictionary that app.py would pass.
+    # In a real scenario, these would be loaded from files/URLs by app.py.
+    class DummyScaler:
+        def transform(self, df):
+            # A dummy scaler that returns the input as is
+            return df.values
 
-    # --- Test Patient Data (as discussed) ---
+    class DummyRFModel:
+        def predict(self, data):
+            return np.array([1]) # Simulates a positive prediction
+        def predict_proba(self, data):
+            return np.array([[0.2, 0.8]]) # Simulates a high probability of HCV
+
+    class DummyTFModel(keras.Model):
+        def predict(self, data):
+            return np.array([[0.8]]) # Simulates a high probability of HCV
+
+    # Simulating the models dictionary
+    simulated_models = {
+        'rf_model': DummyRFModel(),
+        'tf_model': DummyTFModel(),
+        'scaler': DummyScaler(),
+        'feature_names': ML_FEATURES
+    }
+
+    print("Note: The models are dummy objects for local testing.")
+
+    # --- Test Patient Data ---
     patient_data_1 = { # Low risk, no HCV
         'Age': 35, 'Sex': 'female', 'BMI': 22.5, 'Smoking': 0, 'AlcoholConsumption': 5,
         'PreviousMedicalConditions': 0, 'FamilyHistory': 0, 'ALT': 25, 'AST': 20, 'ALP': 80,
-        'Bilirubin': 0.8, 'Albumin': 4.5, 'Platelets': 250, 'HCV_RNA_Viral_Load': 0
+        'Bilirubin': 0.8, 'Albumin': 4.5, 'Platelets': 250, 'HCV_RNA_Viral_Load': 0, 'HCV_RNA_Detected': False
     }
     
     patient_data_2 = { # Moderate risk, potential for HCV
         'Age': 50, 'Sex': 'male', 'BMI': 31.0, 'Smoking': 1, 'AlcoholConsumption': 30,
         'PreviousMedicalConditions': 1, 'FamilyHistory': 0, 'ALT': 65, 'AST': 55, 'ALP': 150,
-        'Bilirubin': 1.5, 'Albumin': 3.8, 'Platelets': 140, 'HCV_RNA_Viral_Load': 100000
+        'Bilirubin': 1.5, 'Albumin': 3.8, 'Platelets': 140, 'HCV_RNA_Viral_Load': 100000, 'HCV_RNA_Detected': True
     }
     
     # Critical risk case
     patient_data_3 = {
         'Age': 60, 'Sex': 'male', 'BMI': 25.0, 'Smoking': 1, 'AlcoholConsumption': 80,
         'PreviousMedicalConditions': 1, 'FamilyHistory': 1, 'ALT': 500, 'AST': 1200, 'ALP': 300,
-        'Bilirubin': 5.5, 'Albumin': 2.5, 'Platelets': 80, 'HCV_RNA_Viral_Load': 500000
+        'Bilirubin': 5.5, 'Albumin': 2.5, 'Platelets': 80, 'HCV_RNA_Viral_Load': 500000, 'HCV_RNA_Detected': True
     }
     
     # Run tests and print results
     print("\n--- Test Case 1: Low Risk Patient ---")
-    result_1 = predict_hepatitis_c(patient_data_1)
+    result_1 = predict_hepatitis_c(patient_data_1, simulated_models)
     print(f"Prediction Result: {result_1}")
 
     print("\n--- Test Case 2: Moderate Risk Patient with potential HCV ---")
-    result_2 = predict_hepatitis_c(patient_data_2)
+    result_2 = predict_hepatitis_c(patient_data_2, simulated_models)
     print(f"Prediction Result: {result_2}")
 
     print("\n--- Test Case 3: Critical Risk Patient ---")
-    result_3 = predict_hepatitis_c(patient_data_3)
+    result_3 = predict_hepatitis_c(patient_data_3, simulated_models)
     print(f"Prediction Result: {result_3}")
