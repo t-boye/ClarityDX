@@ -6,26 +6,99 @@ import logging
 from typing import Dict, Union, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from io import BytesIO
 import tempfile
-import json # For saving dummy feature names
+import json
+import requests # Import requests library
 
 # Try to import TensorFlow, provide helpful error if not installed
 try:
+    # We still need these for type hints, but we won't use them to load the model
     from tensorflow.keras.models import load_model as keras_load_model
     from tensorflow import keras
     _tensorflow_available = True
 except ImportError:
     _tensorflow_available = False
-    print("Warning: TensorFlow not found. ML model predictions will use a dummy model or be skipped if configured.")
+    print("Warning: TensorFlow not found. ML model predictions will be skipped.")
 
 # Configure logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Set to DEBUG for detailed output during development
+logger.setLevel(logging.INFO)
 if not logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    
+# Environment variables for AWS S3 URLs of Heart Disease model artifacts
+HEART_DISEASE_MODEL_URL = os.getenv("HEART_DISEASE_MODEL_URL", "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/heart_disease_model_advanced/heart_disease_model_advanced.keras")
+HEART_DISEASE_SCALER_URL = os.getenv("HEART_DISEASE_SCALER_URL", "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/heart_disease_model_advanced/heart_disease_scaler.pkl")
+HEART_DISEASE_POLY_FEATURES_URL = os.getenv("HEART_DISEASE_POLY_FEATURES_URL", "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/heart_disease_model_advanced/heart_disease_polynomial_features.pkl")
+HEART_DISEASE_PCA_URL = os.getenv("HEART_DISEASE_PCA_URL", "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/heart_disease_model_advanced/heart_disease_pca.pkl")
+HEART_DISEASE_FEATURE_NAMES_URL = os.getenv("HEART_DISEASE_FEATURE_NAMES_URL", "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/heart_disease_model_advanced/heart_disease_feature_names.pkl")
+
+# Global instances (will be populated on startup)
+heart_disease_model_instance = None
+heart_disease_scaler_instance = None
+heart_disease_polynomial_features_instance = None
+heart_disease_pca_instance = None
+heart_disease_feature_names_list = None
+
+from io import BytesIO
+import joblib
+import requests
+
+def load_joblib_from_url(url: str):
+    """Fetches a joblib artifact from a URL and loads it into memory."""
+    if not url:
+        raise ValueError("URL is not set.")
+    try:
+        logger.info(f"Fetching artifact from {url}")
+        response = requests.get(url)
+        response.raise_for_status()
+        return joblib.load(BytesIO(response.content))
+    except Exception as e:
+        logger.error(f"Failed to load artifact from {url}: {e}")
+        raise RuntimeError(f"Failed to load model artifact from URL: {url}") from e
+
+def load_heart_disease_artifacts():
+    """
+    Loads pre-trained ML model artifacts directly from URLs into memory.
+    This version skips Keras model loading due to file system dependency.
+    """
+    global heart_disease_model_instance, heart_disease_scaler_instance, \
+        heart_disease_polynomial_features_instance, heart_disease_pca_instance, \
+        heart_disease_feature_names_list
+
+    try:
+        # Load joblib artifacts from URLs
+        heart_disease_scaler_instance = load_joblib_from_url(HEART_DISEASE_SCALER_URL)
+        heart_disease_polynomial_features_instance = load_joblib_from_url(HEART_DISEASE_POLY_FEATURES_URL)
+        heart_disease_pca_instance = load_joblib_from_url(HEART_DISEASE_PCA_URL)
+        heart_disease_feature_names_list = load_joblib_from_url(HEART_DISEASE_FEATURE_NAMES_URL)
+        
+        # We explicitly skip the Keras model, as it cannot be loaded without a local file path
+        if _tensorflow_available:
+            logger.warning("TensorFlow is available, but the Keras model is not being loaded "
+                           "because it requires a local file path. The model must be served "
+                           "via an external service or loaded differently.")
+            heart_disease_model_instance = None
+        else:
+            logger.warning("TensorFlow not available. Keras model loading skipped.")
+
+        logger.info("Heart Disease joblib artifacts loaded successfully from URLs. Keras model was skipped.")
+
+    except Exception as e:
+        logger.error(f"Failed to load Heart Disease ML artifacts from URLs: {e}", exc_info=True)
+        heart_disease_model_instance = None
+        heart_disease_scaler_instance = None
+        heart_disease_polynomial_features_instance = None
+        heart_disease_pca_instance = None
+        heart_disease_feature_names_list = None
+        raise RuntimeError("Application startup failed due to missing or corrupt model artifacts.") from e
+
+# Load artifacts once on module import/app startup
+load_heart_disease_artifacts()
 
 # --- Risk Level Enum ---
 class RiskLevel(Enum):
@@ -34,7 +107,7 @@ class RiskLevel(Enum):
     MODERATE = "Moderate Risk"
     HIGH = "High Risk"
     CRITICAL = "Critical Risk"
-    INDETERMINATE = "Indeterminate Risk (Conflicting Data)" # New: For conflicting but non-fatal data
+    INDETERMINATE = "Indeterminate Risk (Conflicting Data)"
 
 # --- Knowledge Base Data Structures ---
 @dataclass
@@ -70,34 +143,34 @@ class HeartDiseaseKnowledgeBase:
             # Critical Risk Rules - designed to flag severe conditions immediately
             MedicalRule(
                 condition="major_vessels_severe",
-                risk_score=0.98, # Increased
+                risk_score=0.98,
                 evidence_weight=0.95,
                 description="Severe multi-vessel coronary artery disease (>=3 vessels affected)",
                 recommendation="URGENT: Immediate cardiology consultation for revascularization"
             ),
             MedicalRule(
                 condition="thalassemia_fixed_defect",
-                risk_score=0.95, # Increased
+                risk_score=0.95,
                 evidence_weight=0.90,
                 description="Fixed perfusion defect indicating myocardial infarction (scar tissue)",
                 recommendation="URGENT: Immediate evaluation for previous MI and current risk"
             ),
             MedicalRule(
-                condition="st_depression_extreme", # New critical rule based on your input
+                condition="st_depression_extreme",
                 risk_score=0.92,
                 evidence_weight=0.88,
                 description="Extreme ST depression (e.g., > 2.5mm) during exercise suggests severe ischemia",
                 recommendation="URGENT: Stress test highly indicative of severe CAD. Expedite cardiology consult."
             ),
             MedicalRule(
-                condition="max_hr_critically_low_with_symptoms", # New critical rule
+                condition="max_hr_critically_low_with_symptoms",
                 risk_score=0.90,
                 evidence_weight=0.85,
                 description="Critically low maximum heart rate during exercise, especially with symptoms, indicates severe cardiac dysfunction.",
                 recommendation="EMERGENCY: Immediate medical evaluation, potential cardiac arrest risk."
             ),
             MedicalRule(
-                condition="resting_bp_critically_low_with_symptoms", # New critical rule
+                condition="resting_bp_critically_low_with_symptoms",
                 risk_score=0.90,
                 evidence_weight=0.85,
                 description="Critically low resting blood pressure, especially with symptoms, indicates severe circulatory shock.",
@@ -107,27 +180,27 @@ class HeartDiseaseKnowledgeBase:
             # High Risk Rules - indicate significant risk requiring prompt attention
             MedicalRule(
                 condition="chest_pain_typical_angina",
-                risk_score=0.85, # Increased
+                risk_score=0.85,
                 evidence_weight=0.80,
                 description="Typical angina pattern strongly suggests coronary artery disease (CAD)",
                 recommendation="Immediate stress testing and cardiology referral"
             ),
             MedicalRule(
                 condition="exercise_angina_positive",
-                risk_score=0.80, # Increased
+                risk_score=0.80,
                 evidence_weight=0.75,
                 description="Exercise-induced angina indicates significant coronary stenosis",
                 recommendation="Stress testing and possible cardiac catheterization"
             ),
             MedicalRule(
-                condition="st_slope_downsloping", # Promoted to High Risk rule
+                condition="st_slope_downsloping",
                 risk_score=0.78,
                 evidence_weight=0.75,
                 description="Downsloping ST segment during exercise is a strong indicator of myocardial ischemia.",
                 recommendation="Cardiology evaluation for coronary artery disease"
             ),
             MedicalRule(
-                condition="multiple_major_risk_factors", # Renamed from multiple_risk_factors
+                condition="multiple_major_risk_factors",
                 risk_score=0.70,
                 evidence_weight=0.65,
                 description="Presence of multiple major cardiovascular risk factors (e.g., age, high cholesterol, diabetes, hypertension)",
@@ -137,21 +210,21 @@ class HeartDiseaseKnowledgeBase:
             # Moderate Risk Rules - suggest a need for intervention and monitoring
             MedicalRule(
                 condition="cholesterol_very_high",
-                risk_score=0.60, # Increased
+                risk_score=0.60,
                 evidence_weight=0.55,
                 description="Very high cholesterol levels (e.g., >240 mg/dL)",
                 recommendation="Lipid management and cardiovascular risk assessment"
             ),
             MedicalRule(
                 condition="hypertension_severe",
-                risk_score=0.55, # Increased
+                risk_score=0.55,
                 evidence_weight=0.50,
                 description="Severe hypertension (e.g., Resting BP > 160/100 mmHg)",
                 recommendation="Blood pressure management and cardiac evaluation"
             ),
             MedicalRule(
                 condition="diabetes_uncontrolled",
-                risk_score=0.50, # Increased
+                risk_score=0.50,
                 evidence_weight=0.45,
                 description="Uncontrolled diabetes mellitus (e.g., high Fasting BS)",
                 recommendation="Glycemic control and cardiovascular screening"
@@ -170,66 +243,66 @@ class HeartDiseaseKnowledgeBase:
                 'weight': 0.15
             },
             'sex': {
-                'male': 0.6, 'female': 0.4, # Risk contribution for males vs. females
+                'male': 0.6, 'female': 0.4,
                 'weight': 0.10
             },
-            'cp': { # Chest Pain Type (numerical 0-3 for ML, mapped to strings for rules)
+            'cp': {
                 'typical angina': 0.9, 'atypical angina': 0.6, 
                 'non-anginal pain': 0.3, 'asymptomatic': 0.1,
                 'weight': 0.20
             },
-            'trestbps': { # Resting Blood Pressure (numerical)
+            'trestbps': {
                 'ranges': [(0, 120, 0.1), (120, 130, 0.3), (130, 140, 0.5), (140, 160, 0.7), (160, 250, 0.9)],
                 'weight': 0.15
             },
-            'chol': { # Cholesterol (numerical)
+            'chol': {
                 'ranges': [(0, 200, 0.2), (200, 240, 0.4), (240, 300, 0.7), (300, 500, 0.9)],
                 'weight': 0.15
             },
-            'fbs': { # Fasting Blood Sugar > 120 mg/dl (numerical 0/1, mapped to strings)
-                'normal': 0.2, 'elevated': 0.8, # Risk for elevated fasting blood sugar
+            'fbs': {
+                'normal': 0.2, 'elevated': 0.8,
                 'weight': 0.10
             },
-            'restecg': { # Resting ECG (numerical 0-2, mapped to strings)
+            'restecg': {
                 'normal': 0.1, 'st-t abnormality': 0.5, 'left ventricular hypertrophy': 0.6,
                 'weight': 0.05
             },
-            'thalach': { # Max Heart Rate Achieved (numerical)
-                'ranges': [(0, 100, 0.8), (100, 140, 0.5), (140, 180, 0.2), (180, 220, 0.1)], # Lower is generally higher risk if not elderly
+            'thalach': {
+                'ranges': [(0, 100, 0.8), (100, 140, 0.5), (140, 180, 0.2), (180, 220, 0.1)],
                 'weight': 0.10
             },
-            'exang': { # Exercise Induced Angina (numerical 0/1, mapped to strings)
-                'no': 0.1, 'yes': 0.8, # Risk for exercise-induced angina
+            'exang': {
+                'no': 0.1, 'yes': 0.8,
                 'weight': 0.15
             },
-            'oldpeak': { # ST Depression (numerical)
+            'oldpeak': {
                 'ranges': [(0, 1.0, 0.1), (1.0, 2.0, 0.4), (2.0, 3.0, 0.7), (3.0, 7.0, 0.9)],
                 'weight': 0.20
             },
-            'slope': { # ST Segment Slope (numerical 0-2, mapped to strings)
-                'upsloping': 0.2, 'flat': 0.5, 'downsloping': 0.8, # Risk for different ST segment slopes
-                'weight': 0.18 # Increased weight for its significance
+            'slope': {
+                'upsloping': 0.2, 'flat': 0.5, 'downsloping': 0.8,
+                'weight': 0.18
             },
-            'ca': { # Number of Major Vessels (numerical 0-3)
-                'ranges': [(0, 1, 0.1), (1, 2, 0.4), (2, 3, 0.7), (3, 4, 0.95)], # Number of major vessels colored by fluoroscopy
+            'ca': {
+                'ranges': [(0, 1, 0.1), (1, 2, 0.4), (2, 3, 0.7), (3, 4, 0.95)],
                 'weight': 0.25
             },
-            'thal': { # Thalassemia (numerical 1-3, mapped to strings)
-                'normal': 0.1, 'reversible defect': 0.5, 'fixed defect': 0.9, # Thalassemia types
-                'weight': 0.22 # Increased weight for its significance
+            'thal': {
+                'normal': 0.1, 'reversible defect': 0.5, 'fixed defect': 0.9,
+                'weight': 0.22
             }
         }
     
     def _initialize_normal_ranges(self) -> Dict[str, Tuple[float, float]]:
         """Define normal physiological ranges for various parameters, used for input validation."""
         return {
-            'age': (18, 100), # Age range for adults
-            'trestbps': (70, 200), # Resting BP (systolic) - expanded for wider realistic range
-            'chol': (100, 400), # Cholesterol range
-            'thalach': (60, 220), # Max Heart Rate - broader realistic range
-            'oldpeak': (0.0, 5.0), # ST depression, max possible around 6-7
-            'ca': (0, 3), # Number of major vessels
-            'fbs': (0, 1) # Binary for 0 or 1
+            'age': (18, 100),
+            'trestbps': (70, 200),
+            'chol': (100, 400),
+            'thalach': (60, 220),
+            'oldpeak': (0.0, 5.0),
+            'ca': (0, 3),
+            'fbs': (0, 1)
         }
 
     def _initialize_feature_mapping(self) -> Dict[str, Dict]:
@@ -265,64 +338,56 @@ class RuleBasedDiagnosticSystem:
         max_risk_score = 0.0
         is_contradictory = False
         
-        # Access data using ML feature names for consistency, as they're expected to be preprocessed
-        # (or handle user-friendly names gracefully where needed, as in the previous version)
-        
-        # Check for presence of crucial data before evaluating rules that rely on them
+        # Access data using ML feature names for consistency
         age = patient_data.get('age')
-        chol = patient_data.get('chol')
-        fbs = patient_data.get('fbs')
-        exang = patient_data.get('exang')
-        ca = patient_data.get('ca')
-        thal = patient_data.get('thal')
-        trestbps = patient_data.get('trestbps')
+        cp = patient_data.get('cp')
         thalach = patient_data.get('thalach')
+        exang = patient_data.get('exang')
+        trestbps = patient_data.get('trestbps')
         oldpeak = patient_data.get('oldpeak')
         slope = patient_data.get('slope')
-        cp = patient_data.get('cp')
+        ca = patient_data.get('ca')
+        thal = patient_data.get('thal')
 
         # Rule 1: Severe multi-vessel disease (ca >= 3)
         if ca is not None and ca >= 3:
             critical_flags.append("Severe multi-vessel coronary artery disease")
-            max_risk_score = max(max_risk_score, self.kb.rules[0].risk_score) # From rules list
+            max_risk_score = max(max_risk_score, self.kb.rules[0].risk_score)
             logger.debug(f"Critical Rule Triggered: Severe multi-vessel disease (ca={ca})")
             
         # Rule 2: Fixed perfusion defect (Thalassemia == 2)
-        if thal is not None and thal == 2: # '2' maps to 'fixed defect'
+        if thal is not None and thal == 2:
             critical_flags.append("Fixed perfusion defect (previous MI)")
-            max_risk_score = max(max_risk_score, self.kb.rules[1].risk_score) # From rules list
+            max_risk_score = max(max_risk_score, self.kb.rules[1].risk_score)
             logger.debug(f"Critical Rule Triggered: Fixed perfusion defect (thal={thal})")
 
         # Rule 3: Extreme ST Depression during exercise (oldpeak > 2.5)
-        if oldpeak is not None and oldpeak > 2.5: # Example threshold for extreme ST depression
+        if oldpeak is not None and oldpeak > 2.5:
             critical_flags.append("Extreme ST depression during exercise")
             max_risk_score = max(max_risk_score, self.kb.rules[2].risk_score)
             logger.debug(f"Critical Rule Triggered: Extreme ST depression (oldpeak={oldpeak})")
 
         # Rule 4: Critically low Max HR with symptoms (example thresholds)
-        if thalach is not None and thalach < 70 and (cp == 0 or exang == 1): # If Max HR is very low AND typical angina or exercise angina
+        if thalach is not None and thalach < 70 and (cp == 0 or exang == 1):
             critical_flags.append("Critically low Max Heart Rate with cardiac symptoms")
             max_risk_score = max(max_risk_score, self.kb.rules[3].risk_score)
             logger.debug(f"Critical Rule Triggered: Critically low Max HR (thalach={thalach}, cp={cp}, exang={exang})")
 
         # Rule 5: Critically low Resting BP (example threshold)
-        if trestbps is not None and trestbps < 70: # If resting BP is very low
+        if trestbps is not None and trestbps < 70:
             critical_flags.append("Critically low Resting Blood Pressure")
             max_risk_score = max(max_risk_score, self.kb.rules[4].risk_score)
             logger.debug(f"Critical Rule Triggered: Critically low BP (trestbps={trestbps})")
             
         # --- Contradiction Detection ---
-        # Scenario from your example: Downsloping ST but no major vessels and normal thal
-        if (slope == 2 and # Downsloping
-            ca is not None and ca == 0 and # No major vessel blockages
-            thal is not None and thal == 1): # Normal Thalassemia scan
+        if (slope is not None and slope == 2 and
+            ca is not None and ca == 0 and
+            thal is not None and thal == 1):
             
             is_contradictory = True
             critical_flags.append("Conflicting results: Downsloping ST with no major vessel disease and normal perfusion scan. Requires careful clinical review.")
-            # For a contradictory state, we might cap the risk or make it indeterminate
-            max_risk_score = 0.5 # Force to moderate/indeterminate risk
+            max_risk_score = 0.5
             logger.warning(f"Contradiction Detected: Downsloping ST ({slope}) with CA=0 ({ca}) and Normal Thal ({thal}). Risk adjusted to {max_risk_score}.")
-
 
         return len(critical_flags) > 0, critical_flags, max_risk_score, is_contradictory
     
@@ -340,14 +405,12 @@ class RuleBasedDiagnosticSystem:
             evidence = self._evaluate_risk_factor(factor_ml_name, patient_data, config)
             if evidence:
                 evidence_list.append(evidence)
-                # Ensure the factor_ml_name exists in config before trying to access 'weight'
-                if factor_ml_name in self.kb.risk_factors and 'weight' in self.kb.risk_factors[factor_ml_name]:
-                    total_weighted_score += evidence.risk_contribution * self.kb.risk_factors[factor_ml_name]['weight']
-                    total_weight += self.kb.risk_factors[factor_ml_name]['weight']
+                if 'weight' in config:
+                    total_weighted_score += evidence.risk_contribution * config['weight']
+                    total_weight += config['weight']
                 else:
                     logger.warning(f"Weight not found for factor '{factor_ml_name}'. Skipping its contribution to total_weighted_score.")
         
-        # Normalize the score to be between 0 and 1
         final_risk_score = total_weighted_score / total_weight if total_weight > 0 else 0.0
         logger.debug(f"Rule-based final risk score: {final_risk_score:.2f}")
         logger.debug(f"Rule-based evidence collected: {evidence_list}")
@@ -358,22 +421,21 @@ class RuleBasedDiagnosticSystem:
         """
         Evaluates an individual risk factor from the patient's data against
         the knowledge base configuration.
-        This function expects ML-ready numerical inputs.
         """
         try:
             value = patient_data.get(factor_ml_name)
             if value is None:
                 logger.debug(f"Skipping evaluation for missing factor: {factor_ml_name}")
-                return None # Skip if data is missing, don't use default from rule-based
+                return None
             
             risk_score = 0.0
             reasoning = ""
-            display_value = value # Default display value
+            display_value = value
 
-            if 'ranges' in config: # Numerical factor
+            if 'ranges' in config:
                 risk_score = self._evaluate_ranges(value, config['ranges'])
                 reasoning = f"{factor_ml_name} {value} contributes {risk_score:.2f} risk"
-            elif isinstance(config, dict): # Categorical factor (e.g., sex, cp, fbs)
+            elif isinstance(config, dict):
                 # Reverse map numerical ML value to string for rule lookup and reasoning
                 if factor_ml_name == 'sex':
                     display_value = 'Male' if value == 1 else 'Female'
@@ -408,10 +470,10 @@ class RuleBasedDiagnosticSystem:
             
             logger.debug(f"    Evaluating {factor_ml_name}: {display_value}, Risk: {risk_score:.2f}")
             return DiagnosticEvidence(
-                factor=factor_ml_name.replace('_', ' ').title(), # Format for display
+                factor=factor_ml_name.replace('_', ' ').title(),
                 value=display_value,
                 risk_contribution=risk_score,
-                confidence=config.get('confidence', 0.8), # Add confidence to config if needed
+                confidence=config.get('confidence', 0.8),
                 reasoning=reasoning
             )
         except Exception as e:
@@ -423,32 +485,9 @@ class RuleBasedDiagnosticSystem:
         for min_val, max_val, risk_score in ranges:
             if min_val <= value < max_val:
                 return risk_score
-        # If value is beyond all defined ranges, assign the highest risk from the last range
-        # Or, more safely, return a default for out-of-range, depending on desired behavior.
-        # For medical values, sometimes out-of-range means extreme risk.
         if ranges:
             return ranges[-1][2]
-        return 0.0 # Default if no ranges are defined
-
-# --- Global Artifact Paths and Instances (DEFINED HERE) ---
-# IMPORTANT: Correct the pathing here as previously discussed
-# Get the directory of the current file (heart_disease_prediction.py)
-CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__)) # This is C:\...\backend\prediction
-
-# Go up one level to get to the 'backend' directory
-BACKEND_ROOT_DIR = os.path.abspath(os.path.join(CURRENT_FILE_DIR, '..')) # This will be C:\...\backend
-
-# Now, construct the path to the specific heart disease model directory
-HEART_DISEASE_MODEL_DIR = os.path.join(BACKEND_ROOT_DIR, 'models', 'heart_disease_model_advanced')
-
-
-# Model artifact paths
-HEART_DISEASE_MODEL_PATH = os.path.join(HEART_DISEASE_MODEL_DIR, "heart_disease_model_advanced.keras")
-HEART_DISEASE_SCALER_PATH = os.path.join(HEART_DISEASE_MODEL_DIR, "heart_disease_scaler.pkl")
-HEART_DISEASE_POLYNOMIAL_FEATURES_PATH = os.path.join(HEART_DISEASE_MODEL_DIR, "heart_disease_polynomial_features.pkl")
-HEART_DISEASE_PCA_PATH = os.path.join(HEART_DISEASE_MODEL_DIR, "heart_disease_pca.pkl")
-HEART_DISEASE_FEATURE_NAMES_PATH = os.path.join(HEART_DISEASE_MODEL_DIR, "heart_disease_feature_names.pkl")
-
+        return 0.0
 
 # Global artifact instances
 heart_disease_model_instance = None
@@ -457,105 +496,7 @@ heart_disease_polynomial_features_instance = None
 heart_disease_pca_instance = None
 heart_disease_feature_names_list = None
 
-def create_dummy_feature_names(output_path, num_features=18):
-    """Creates a dummy feature names file if not found, mirroring the input shape."""
-    if not os.path.exists(output_path):
-        dummy_names = [f'feature_{i}' for i in range(num_features)]
-        with open(output_path, 'wb') as f:
-            joblib.dump(dummy_names, f)
-        logger.warning(f"Created dummy feature names file at: {output_path}")
 
-# Your existing load_heart_disease_artifacts function (modified to create dummy files if not found)
-def load_heart_disease_artifacts():
-    """
-    Loads pre-trained ML model artifacts (Keras model, scaler, polynomial features, PCA)
-    into global variables. If files are not found, it creates dummy artifacts for
-    demonstration and testing purposes. In a real deployment, these files would be
-    present and pre-trained.
-    """
-    global heart_disease_model_instance
-    global heart_disease_scaler_instance
-    global heart_disease_polynomial_features_instance
-    global heart_disease_pca_instance
-    global heart_disease_feature_names_list
-
-    try:
-        if not _tensorflow_available:
-            logger.error("TensorFlow not available. Cannot load/create Keras model. ML predictions will be skipped.")
-            return # Exit if TensorFlow isn't there
-
-        # Create model directory if it doesn't exist
-        os.makedirs(HEART_DISEASE_MODEL_DIR, exist_ok=True)
-        logger.info(f"Ensured model directory exists: {HEART_DISEASE_MODEL_DIR}")
-
-        if heart_disease_model_instance is None:
-            if not os.path.exists(HEART_DISEASE_MODEL_PATH):
-                logger.warning(f"Model file not found: {HEART_DISEASE_MODEL_PATH}. Creating mock Keras model.")
-                # Define a dummy model (adjust input_shape based on expected PCA output)
-                # Assumes PCA reduces features to 18 as per previous dummy model.
-                dummy_model = keras.Sequential([keras.layers.Dense(1, input_shape=(18,), activation='sigmoid')]) 
-                dummy_model.compile(optimizer='adam', loss='binary_crossentropy') # Compile for saving
-                dummy_model.save(HEART_DISEASE_MODEL_PATH)
-                logger.warning("Created a dummy Keras model for testing purposes.")
-            heart_disease_model_instance = keras_load_model(HEART_DISEASE_MODEL_PATH)
-            logger.info(f"Loaded Heart Disease Keras Model from: {HEART_DISEASE_MODEL_PATH}")
-
-        # For scaler, poly features, PCA, and feature names, we'll create simple mock objects
-        # if the real ones don't exist.
-        if heart_disease_scaler_instance is None:
-            if not os.path.exists(HEART_DISEASE_SCALER_PATH):
-                logger.warning(f"Scaler file not found: {HEART_DISEASE_SCALER_PATH}. Creating mock Scaler.")
-                # Simple mock scaler
-                class MockScaler:
-                    def transform(self, X): return X
-                    def fit(self, X): pass # Add fit method for compatibility if needed
-                joblib.dump(MockScaler(), HEART_DISEASE_SCALER_PATH)
-            heart_disease_scaler_instance = joblib.load(HEART_DISEASE_SCALER_PATH)
-            logger.info(f"Loaded Heart Disease Scaler from: {HEART_DISEASE_SCALER_PATH}")
-
-        if heart_disease_polynomial_features_instance is None:
-            if not os.path.exists(HEART_DISEASE_POLYNOMIAL_FEATURES_PATH):
-                logger.warning(f"Polynomial Features file not found: {HEART_DISEASE_POLYNOMIAL_FEATURES_PATH}. Creating mock PolynomialFeatures.")
-                # Simple mock PolynomialFeatures
-                class MockPolynomialFeatures:
-                    def fit_transform(self, X): return X # No transformation
-                    def get_feature_names_out(self, input_features): return input_features # No new names
-                joblib.dump(MockPolynomialFeatures(), HEART_DISEASE_POLYNOMIAL_FEATURES_PATH)
-            heart_disease_polynomial_features_instance = joblib.load(HEART_DISEASE_POLYNOMIAL_FEATURES_PATH)
-            logger.info(f"Loaded Heart Disease Polynomial Features from: {HEART_DISEASE_POLYNOMIAL_FEATURES_PATH}")
-
-        if heart_disease_pca_instance is None:
-            if not os.path.exists(HEART_DISEASE_PCA_PATH):
-                logger.warning(f"PCA file not found: {HEART_DISEASE_PCA_PATH}. Creating mock PCA.")
-                # Simple mock PCA (does nothing)
-                class MockPCA:
-                    n_components_ = 18 # Match dummy model input shape
-                    def transform(self, X): return X
-                joblib.dump(MockPCA(), HEART_DISEASE_PCA_PATH)
-            heart_disease_pca_instance = joblib.load(HEART_DISEASE_PCA_PATH)
-            logger.info(f"Loaded Heart Disease PCA from: {HEART_DISEASE_PCA_PATH}")
-
-        if heart_disease_feature_names_list is None:
-            if not os.path.exists(HEART_DISEASE_FEATURE_NAMES_PATH):
-                logger.warning(f"Feature names file not found: {HEART_DISEASE_FEATURE_NAMES_PATH}. Creating dummy feature names.")
-                create_dummy_feature_names(HEART_DISEASE_FEATURE_NAMES_PATH)
-            heart_disease_feature_names_list = joblib.load(HEART_DISEASE_FEATURE_NAMES_PATH)
-            logger.info(f"Loaded Heart Disease Feature Names from: {HEART_DISEASE_FEATURE_NAMES_PATH}")
-
-    except Exception as e:
-        logger.error(f"Failed to load or create heart disease ML artifacts: {e}", exc_info=True)
-        # Set instances to None to indicate failure and prevent partial loading
-        heart_disease_model_instance = None
-        heart_disease_scaler_instance = None
-        heart_disease_polynomial_features_instance = None
-        heart_disease_pca_instance = None
-        heart_disease_feature_names_list = None
-        raise # Re-raise the exception to propagate the error
-
-# Ensure artifacts are loaded at system startup
-# This will be called when the module is imported by app.py
-load_heart_disease_artifacts()
-logger.info("Heart Disease model components initialization attempted.")
 
 def preprocess_user_input_for_ml(raw_data: Dict, kb: HeartDiseaseKnowledgeBase) -> Tuple[pd.DataFrame, str]:
     processed_data = {}

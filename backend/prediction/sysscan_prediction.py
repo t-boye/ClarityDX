@@ -1,6 +1,7 @@
 import logging
 import os
 import joblib
+import requests
 import re
 import pandas as pd
 import nltk
@@ -9,6 +10,92 @@ from nltk.stem import WordNetLemmatizer
 from typing import List, Set, Dict, Any, Union, Optional # Keep these imports
 
 logger = logging.getLogger(__name__)
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Define the base URL for the SymScan model artifacts
+SYMSCAN_BASE_URL = "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/symScan/"
+
+# Environment variables for remote artifact URLs, with fallbacks to the S3 paths
+SYMSCAN_MODEL_URL = os.getenv("SYMSCAN_MODEL_URL", f"{SYMSCAN_BASE_URL}sympton_classifier_model.pkl")
+UNIQUE_SYMPTOMS_URL = os.getenv("UNIQUE_SYMPTOMS_URL", f"{SYMSCAN_BASE_URL}unique_symptoms.pkl")
+UNIQUE_DISEASES_URL = os.getenv("UNIQUE_DISEASES_URL", f"{SYMSCAN_BASE_URL}unique_diseases.pkl")
+INT_TO_DISEASE_MAP_URL = os.getenv("INT_TO_DISEASE_MAP_URL", f"{SYMSCAN_BASE_URL}int_to_disease_map.pkl")
+DISEASE_TO_INT_MAP_URL = os.getenv("DISEASE_TO_INT_MAP_URL", f"{SYMSCAN_BASE_URL}disease_to_int_map.pkl")
+PRECAUTIONS_MAP_URL = os.getenv("PRECAUTIONS_MAP_URL", f"{SYMSCAN_BASE_URL}precautions_map.pkl")
+
+# Global instances (will be populated on startup)
+symscan_model = None
+unique_symptoms = None
+unique_diseases = None
+int_to_disease_map = None
+disease_to_int_map = None
+precautions_map = None
+
+def load_joblib_from_url(url: str):
+    """
+    Fetches a joblib artifact from a URL and loads it directly into memory.
+    """
+    if not url:
+        raise ValueError("URL for joblib artifact is not set.")
+    try:
+        logger.info(f"Fetching joblib artifact from {url}")
+        response = requests.get(url)
+        response.raise_for_status()
+        return joblib.load(BytesIO(response.content))
+    except Exception as e:
+        logger.error(f"Failed to load artifact from {url}: {e}")
+        raise RuntimeError(f"Failed to load model artifact from URL: {url}") from e
+
+def load_symscan_artifacts():
+    """
+    Loads all SymScan model artifacts directly from URLs into memory.
+    """
+    global symscan_model, unique_symptoms, unique_diseases, int_to_disease_map, disease_to_int_map, precautions_map
+
+    # List of artifacts to load
+    artifacts_to_load = {
+        "model": SYMSCAN_MODEL_URL,
+        "unique_symptoms": UNIQUE_SYMPTOMS_URL,
+        "unique_diseases": UNIQUE_DISEASES_URL,
+        "int_to_disease_map": INT_TO_DISEASE_MAP_URL,
+        "disease_to_int_map": DISEASE_TO_INT_MAP_URL,
+        "precautions_map": PRECAUTIONS_MAP_URL,
+    }
+
+    loaded_artifacts = {}
+    for name, url in artifacts_to_load.items():
+        try:
+            loaded_artifacts[name] = load_joblib_from_url(url)
+        except Exception as e:
+            logger.error(f"Failed to load artifact '{name}': {e}")
+            raise RuntimeError(f"Application startup failed due to missing or corrupt SymScan artifact: {name}.") from e
+
+    # Assign loaded artifacts to global variables
+    symscan_model = loaded_artifacts["model"]
+    unique_symptoms = loaded_artifacts["unique_symptoms"]
+    unique_diseases = loaded_artifacts["unique_diseases"]
+    int_to_disease_map = loaded_artifacts["int_to_disease_map"]
+    disease_to_int_map = loaded_artifacts["disease_to_int_map"]
+    precautions_map = loaded_artifacts["precautions_map"]
+
+    logger.info("SymScan model artifacts loaded successfully from URLs.")
+
+
+# Load SymScan artifacts at module import or app startup
+try:
+    load_symscan_artifacts()
+except RuntimeError as e:
+    logger.error(str(e))
+    # Optionally, set globals to None to handle gracefully
+    symscan_model = None
+    unique_symptoms = None
+    unique_diseases = None
+    int_to_disease_map = None
+    disease_to_int_map = None
+    precautions_map = None
+
 
 # --- NLTK Setup ---
 # Ensure NLTK data is ready when this module is imported.
@@ -1238,17 +1325,7 @@ def normalize_symptom_name(symptom_name: str) -> Optional[str]:
     lemmatized = lemmatize_and_remove_stopwords(cleaned)
     return SYMPTOM_SYNONYMS.get(lemmatized, lemmatized)
 
-# --- SymScan Model and Data Loading ---
-# Calculate PROJECT_ROOT relative to the current file
-current_dir = os.path.dirname(__file__) # backend/prediction
-backend_dir = os.path.join(current_dir, '..') # backend
-PROJECT_ROOT = os.path.abspath(os.path.join(backend_dir, '..')) # project_root
 
-SYMSCAN_MODEL_PATH = os.path.join(PROJECT_ROOT, 'backend', 'models', 'symScan', 'sympton_classifier_model.pkl')
-UNIQUE_SYMPTOMS_PATH = os.path.join(PROJECT_ROOT, 'backend', 'models', 'symScan', 'unique_symptoms.pkl')
-UNIQUE_DISEASES_PATH = os.path.join(PROJECT_ROOT, 'backend', 'models', 'symScan', 'unique_diseases.pkl')
-INT_TO_DISEASE_MAP_PATH = os.path.join(PROJECT_ROOT, 'backend', 'models', 'symScan', 'int_to_disease_map.pkl')
-PRECAUTIONS_MAP_PATH = os.path.join(PROJECT_ROOT, 'backend', 'models', 'symScan', 'precautions_map.pkl')
 
 _symscan_classifier = None
 _symscan_unique_symptoms = None

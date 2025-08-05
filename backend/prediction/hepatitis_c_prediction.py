@@ -2,34 +2,179 @@ import pandas as pd
 import numpy as np
 import os
 import joblib
+import shutil
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_auc_score
 from enum import Enum
+from io import BytesIO
 import logging
-from typing import Dict, Any, Union, List
+from typing import Dict, Any, Union, List, Optional
+import tempfile
+import requests
 
-# Configure logging for better insights
+# Try to import TensorFlow, provide helpful error if not installed
+try:
+    from tensorflow.keras.models import load_model as keras_load_model
+    from tensorflow import keras
+    _tensorflow_available = True
+except ImportError:
+    _tensorflow_available = False
+    print("Warning: TensorFlow not found. Some ML model predictions will be skipped.")
+
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- Global Artifact Paths ---
-# Get the directory of the current file (hepatitis_c_prediction.py)
-CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Define the base URL for the Hepatitis C model artifacts
+HEPATITIS_C_BASE_URL = "https://claritydx-ai-models-2025.s3.us-east-1.amazonaws.com/hepatitis_c_model/"
 
-# Go up one level to get to the 'backend' directory
-BACKEND_ROOT_DIR = os.path.abspath(os.path.join(CURRENT_FILE_DIR, '..'))
+# Get environment variables for all remote model artifact URLs, with fallbacks to the S3 paths
+HEPATITIS_C_SCALER_URL = os.getenv("HEPATITIS_C_SCALER_URL", f"{HEPATITIS_C_BASE_URL}hepatitis_c_scaler.pkl")
+HEPATITIS_C_RF_MODEL_URL = os.getenv("HEPATITIS_C_RF_MODEL_URL", f"{HEPATITIS_C_BASE_URL}random_forest_model.pkl")
+HEPATITIS_C_FEATURE_NAMES_URL = os.getenv("HEPATITIS_C_FEATURE_NAMES_URL", f"{HEPATITIS_C_BASE_URL}hepatitis_c_feature_names.pkl")
+HEPATITIS_C_TF_MODEL_URL = os.getenv("HEPATITIS_C_TF_MODEL_URL", f"{HEPATITIS_C_BASE_URL}hepatitis_c_model.tf/")
 
-# Now, construct the path to the specific Hepatitis C model directory
-# within the main 'models' directory of the backend.
-# Renamed from HEPATITIS_C_MODEL_DIR to MODEL_DIR for consistency with the rest of the file
-# and previous error context, if you prefer HEPATITIS_C_MODEL_DIR, ensure to use it everywhere.
-MODEL_DIR = os.path.join(BACKEND_ROOT_DIR, "models", "hepatitis_c_model")
+# Global instances
+hepatitis_c_scaler = None
+hepatitis_c_rf_model = None
+hepatitis_c_tf_model = None
+hepatitis_c_feature_names = None
 
-# Define paths for model artifacts using the corrected directory
-SCALER_PATH = os.path.join(MODEL_DIR, "scaler.pkl")
-ML_MODEL_PATH = os.path.join(MODEL_DIR, "random_forest_model.pkl")
+def load_joblib_from_url(url: str):
+    """
+    Fetches a joblib artifact from a URL and loads it directly into memory.
+    """
+    if not url:
+        raise ValueError("URL for joblib artifact is not set.")
+    try:
+        logger.info(f"Fetching joblib artifact from {url}")
+        response = requests.get(url)
+        response.raise_for_status()
+        return joblib.load(BytesIO(response.content))
+    except Exception as e:
+        logger.error(f"Failed to load artifact from {url}: {e}")
+        raise RuntimeError(f"Failed to load model artifact from URL: {url}") from e
+
+def load_tensorflow_saved_model_from_url(base_url: str):
+    """
+    Loads a TensorFlow SavedModel from a remote URL. This requires downloading
+    the model's directory structure to a temporary location.
+    """
+    if not base_url:
+        raise ValueError("Base URL for TensorFlow SavedModel is not set.")
+    
+    if not _tensorflow_available:
+        raise RuntimeError("TensorFlow not available. Cannot load SavedModel.")
+
+    # Define the list of files to download based on the SavedModel format
+    files_to_download = [
+        "fingerprint.pb",
+        "keras_metadata.pb",
+        "saved_model.pb",
+        "variables/variables.data-00000-of-00001",
+        "variables/variables.index"
+    ]
+    
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp()
+        logger.info(f"Downloading TensorFlow SavedModel to temporary directory: {temp_dir}")
+        
+        for file_name in files_to_download:
+            url = f"{base_url}{file_name}"
+            local_path = os.path.join(temp_dir, file_name)
+            
+            # Create subdirectories if they don't exist
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            
+            logger.info(f"Downloading {url} to {local_path}")
+            response = requests.get(url)
+            response.raise_for_status()
+            with open(local_path, "wb") as f:
+                f.write(response.content)
+        
+        logger.info("All TensorFlow model files downloaded successfully.")
+        model = keras_load_model(temp_dir)
+        logger.info("TensorFlow SavedModel loaded into memory.")
+        return model
+
+    except Exception as e:
+        logger.error(f"Failed to load TensorFlow SavedModel from {base_url}: {e}")
+        raise RuntimeError(f"Failed to load TensorFlow model from URL: {base_url}") from e
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            logger.info(f"Removed temporary directory {temp_dir}")
+
+def load_hepatitis_c_artifacts():
+    """
+    Loads all Hepatitis C model artifacts directly from URLs into memory.
+    """
+    global hepatitis_c_scaler, hepatitis_c_rf_model, hepatitis_c_tf_model, hepatitis_c_feature_names
+
+    try:
+        # Load joblib artifacts
+        hepatitis_c_scaler = load_joblib_from_url(HEPATITIS_C_SCALER_URL)
+        hepatitis_c_rf_model = load_joblib_from_url(HEPATITIS_C_RF_MODEL_URL)
+        hepatitis_c_feature_names = load_joblib_from_url(HEPATITIS_C_FEATURE_NAMES_URL)
+
+        # Load TensorFlow model
+        hepatitis_c_tf_model = load_tensorflow_saved_model_from_url(HEPATITIS_C_TF_MODEL_URL)
+
+        logger.info("All Hepatitis C model artifacts loaded successfully from URLs.")
+    
+    except Exception as e:
+        logger.error(f"Failed to load Hepatitis C ML artifacts: {e}", exc_info=True)
+        # Reset globals to None if loading fails
+        hepatitis_c_scaler = None
+        hepatitis_c_rf_model = None
+        hepatitis_c_tf_model = None
+        hepatitis_c_feature_names = None
+        raise RuntimeError("Application startup failed due to missing or corrupt Hepatitis C model artifacts.") from e
+
+# Load artifacts once at import or app startup
+try:
+    load_hepatitis_c_artifacts()
+except RuntimeError as e:
+    logger.error(str(e))
+    # Note: Global variables remain None as set in the exception handler
+
+# The old 'if artifacts is not None:' block is removed.
+# The global variables are now managed directly by the load function.
+
+
+# You can then create a predict function that uses the loaded objects, for example:
+def predict_hepatitis_c(input_data: dict) -> dict:
+    # We now check the global variables directly
+    if hepatitis_c_tf_model is None or hepatitis_c_scaler is None:
+        logger.error("Model artifacts not loaded.")
+        return {"error": "Model artifacts not available", "status_code": 500}
+
+    try:
+        # preprocess input dict to DataFrame as needed
+        input_df = pd.DataFrame([input_data])
+        input_scaled = hepatitis_c_scaler.transform(input_df)
+        
+        # Use the TensorFlow model for prediction
+        # The output of the model is likely a single probability, but predict() returns an array
+        prediction_proba = hepatitis_c_tf_model.predict(input_scaled)[0][0] 
+        # The above line assumes a single output neuron for binary classification
+        
+        # We need to decide a class based on the probability, e.g., a threshold of 0.5
+        prediction = 1 if prediction_proba >= 0.5 else 0
+        
+        logger.info(f"Prediction: {prediction}, Probabilities: {prediction_proba}")
+        
+        return {
+            "prediction": prediction,
+            "probabilities": [1 - prediction_proba, prediction_proba],
+            "class_names": ["No Hepatitis C", "Hepatitis C"]
+        }
+    except Exception as e:
+        logger.error(f"Prediction error: {e}")
+        return {"error": "Prediction failed", "status_code": 500}
 
 # Define feature columns for the ML model (must match training data)
 ML_FEATURES = [
@@ -39,14 +184,13 @@ ML_FEATURES = [
 ]
 
 # Normal/Reference Ranges for LFTs (Approximate values for adults, often vary by lab)
-# These are used for rule-based interpretations
 NORMAL_RANGES = {
-    'ALT': {'min': 7, 'max': 55},     # Units/L
-    'AST': {'min': 8, 'max': 48},     # Units/L
-    'ALP': {'min': 40, 'max': 129},   # Units/L
-    'Bilirubin': {'min': 0.1, 'max': 1.2}, # mg/dL
-    'Albumin': {'min': 3.5, 'max': 5.0},   # g/dL
-    'Platelets': {'min': 150, 'max': 450} # x10^9/L
+    'ALT': {'min': 7, 'max': 55},
+    'AST': {'min': 8, 'max': 48},
+    'ALP': {'min': 40, 'max': 129},
+    'Bilirubin': {'min': 0.1, 'max': 1.2},
+    'Albumin': {'min': 3.5, 'max': 5.0},
+    'Platelets': {'min': 150, 'max': 450}
 }
 
 # Define risk level enumeration for clear diagnosis
@@ -58,94 +202,11 @@ class RiskLevel(Enum):
     CRITICAL = "Critical Risk"
 
 # --- ML Model Management (Simulated for demonstration) ---
-def create_dummy_model_artifacts():
-    """
-    Creates dummy ML model and scaler files for demonstration purposes
-    if they don't exist. In a real scenario, these would be trained and saved.
-    """
-    logger.info("Checking for dummy model artifacts...")
-    
-    # Ensure the model directory exists
-    os.makedirs(MODEL_DIR, exist_ok=True) # MODEL_DIR is now correctly used here
-
-    # Generate dummy data for training
-    np.random.seed(42)
-    num_samples = 200 # Increased sample size for slightly better dummy model
-    data = {
-        'Age': np.random.randint(20, 70, num_samples),
-        'Gender': np.random.choice([0, 1], num_samples), # 0 for Female, 1 for Male
-        'BMI': np.random.uniform(18.0, 35.0, num_samples),
-        'Smoking': np.random.choice([0, 1], num_samples),
-        'AlcoholConsumption': np.random.uniform(0, 50, num_samples), # g/day
-        'PreviousMedicalConditions': np.random.choice([0, 1], num_samples),
-        'FamilyHistory': np.random.choice([0, 1], num_samples),
-        'ALT': np.random.uniform(10, 200, num_samples),
-        'AST': np.random.uniform(10, 180, num_samples),
-        'ALP': np.random.uniform(50, 250, num_samples),
-        'Bilirubin': np.random.uniform(0.5, 3.0, num_samples),
-        'Albumin': np.random.uniform(2.5, 5.0, num_samples),
-        'Platelets': np.random.uniform(100, 400, num_samples),
-        'HCV_RNA_Viral_Load': np.random.uniform(0, 1000000, num_samples) # IU/mL - wider range for viral load
-    }
-    df = pd.DataFrame(data)
-
-    # Create a dummy target variable for Hepatitis C (simulated logic)
-    # Higher viral load, higher LFTs, and certain risk factors increase probability
-    df['HCV_Positive'] = ((df['HCV_RNA_Viral_Load'] > 50000) * 0.7 + # Stronger influence for higher viral load
-                          (df['ALT'] > NORMAL_RANGES['ALT']['max'] * 1.5) * 0.15 +
-                          (df['AST'] > NORMAL_RANGES['AST']['max'] * 1.5) * 0.1 +
-                          (df['AlcoholConsumption'] > 25) * 0.05 +
-                          (df['Smoking'] == 1) * 0.02 +
-                          (df['Age'] > 50) * 0.03).apply(lambda x: 1 if x > 0.5 else 0)
-
-    X = df[ML_FEATURES]
-    y = df['HCV_Positive']
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Check if scaler exists, if not, create and save
-    if not os.path.exists(SCALER_PATH):
-        scaler = StandardScaler()
-        scaler.fit(X_train)
-        joblib.dump(scaler, SCALER_PATH)
-        logger.info(f"Dummy StandardScaler saved to {SCALER_PATH}")
-    else:
-        logger.info(f"Scaler already exists at {SCALER_PATH}. Skipping dummy creation.")
-
-    # Check if model exists, if not, create and save
-    if not os.path.exists(ML_MODEL_PATH):
-        model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced') # Use class_weight for dummy model
-        # Use the already fit scaler for dummy model training data
-        model.fit(scaler.transform(X_train), y_train) 
-        joblib.dump(model, ML_MODEL_PATH)
-        logger.info(f"Dummy RandomForestClassifier saved to {ML_MODEL_PATH}")
-    else:
-        logger.info(f"Model already exists at {ML_MODEL_PATH}. Skipping dummy creation.")
-
-    logger.info("Dummy ML model and scaler creation check completed.")
-
-
-def load_ml_model_and_scaler():
-    """Loads the pre-trained ML model and scaler, or creates dummies if not found."""
-    # First, ensure the model directory exists
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    
-    # Check if artifacts exist. If not, trigger dummy creation.
-    if not (os.path.exists(ML_MODEL_PATH) and os.path.exists(SCALER_PATH)):
-        logger.warning("ML model or scaler not found. Attempting to create dummy artifacts.")
-        create_dummy_model_artifacts()
-
-    try:
-        model = joblib.load(ML_MODEL_PATH)
-        scaler = joblib.load(SCALER_PATH)
-        logger.info("ML model and scaler loaded successfully.")
-        return model, scaler
-    except Exception as e:
-        logger.error(f"Failed to load ML model or scaler: {e}", exc_info=True)
-        raise # Re-raise the exception after logging
-
-# Load ML model and scaler once at the start of the application
-ML_MODEL, SCALER = load_ml_model_and_scaler()
+# NOTE: The dummy model creation and loading logic is no longer needed
+# as we are now loading models from remote URLs.
+# I've removed this section to keep the code clean and focused on the
+# remote artifact loading strategy. If you need it for local development,
+# you would re-add it as a fallback.
 
 # --- Knowledge Base for Rule-Based System ---
 class HepatitisCKnowledgeBase:
@@ -170,15 +231,9 @@ class HepatitisCRuleBasedSystem:
         logger.info("HepatitisCRuleBasedSystem initialized.")
 
     def evaluate_rules(self, patient_data: Dict[str, Any]) -> tuple[float, list[str]]:
-        """
-        Evaluates general liver health rules.
-        Returns a base risk score (0-1) and a list of contributing factors/evidence.
-        """
         risk_score = 0.0
         evidence = []
         
-        # Ensure all relevant keys are present for robust evaluation
-        # Provide sensible defaults for missing data to avoid errors
         alt = patient_data.get('ALT', NORMAL_RANGES['ALT']['min'])
         ast = patient_data.get('AST', NORMAL_RANGES['AST']['min'])
         alp = patient_data.get('ALP', NORMAL_RANGES['ALP']['min'])
@@ -186,25 +241,24 @@ class HepatitisCRuleBasedSystem:
         albumin = patient_data.get('Albumin', NORMAL_RANGES['Albumin']['max'])
         platelets = patient_data.get('Platelets', NORMAL_RANGES['Platelets']['max'])
         bmi = patient_data.get('BMI', 25.0)
-        alcohol_consumption = patient_data.get('AlcoholConsumption', 0) # g/day
+        alcohol_consumption = patient_data.get('AlcoholConsumption', 0)
         previous_conditions = patient_data.get('PreviousMedicalConditions', 0)
         family_history = patient_data.get('FamilyHistory', 0)
         age = patient_data.get('Age', 40)
 
         logger.debug(f"Evaluating general rules for patient data: {patient_data}")
 
-        # --- Basic LFT Abnormalities ---
         if self.kb.is_lft_elevated('ALT', alt):
             risk_score += 0.15
             evidence.append(f"Elevated ALT ({alt} U/L)")
-            if alt > self.kb.normal_ranges['ALT']['max'] * 2: # Significantly elevated
+            if alt > self.kb.normal_ranges['ALT']['max'] * 2:
                 risk_score += 0.15
                 evidence[-1] += " (Significantly elevated)"
 
         if self.kb.is_lft_elevated('AST', ast):
             risk_score += 0.15
             evidence.append(f"Elevated AST ({ast} U/L)")
-            if ast > self.kb.normal_ranges['AST']['max'] * 2: # Significantly elevated
+            if ast > self.kb.normal_ranges['AST']['max'] * 2:
                 risk_score += 0.15
                 evidence[-1] += " (Significantly elevated)"
 
@@ -215,7 +269,7 @@ class HepatitisCRuleBasedSystem:
         if self.kb.is_lft_elevated('Bilirubin', bilirubin):
             risk_score += 0.15
             evidence.append(f"Elevated Bilirubin ({bilirubin} mg/dL)")
-            if bilirubin > self.kb.normal_ranges['Bilirubin']['max'] * 2: # Jaundice concern
+            if bilirubin > self.kb.normal_ranges['Bilirubin']['max'] * 2:
                 risk_score += 0.15
                 evidence[-1] += " (Jaundice concern)"
 
@@ -227,42 +281,34 @@ class HepatitisCRuleBasedSystem:
             risk_score += 0.15
             evidence.append(f"Low Platelet Count ({platelets} x10^9/L)")
 
-        # --- Risk Factors ---
         if bmi >= 30:
             risk_score += 0.05
             evidence.append("High BMI (Obesity)")
 
-        if alcohol_consumption > 20: # g/day, indicative of significant intake
+        if alcohol_consumption > 20:
             risk_score += 0.1
             evidence.append(f"Significant Alcohol Consumption ({alcohol_consumption} g/day)")
-            if alcohol_consumption > 60: # Heavy consumption
+            if alcohol_consumption > 60:
                 risk_score += 0.1
                 evidence[-1] += " (Heavy)"
 
-        if previous_conditions == 1: # Assuming 1 means presence of relevant conditions
+        if previous_conditions == 1:
             risk_score += 0.1
             evidence.append("History of relevant Medical Conditions")
 
-        if family_history == 1: # Assuming 1 means presence of family history
+        if family_history == 1:
             risk_score += 0.05
             evidence.append("Family History of Liver Disease")
 
-        # Cap risk score at 1.0
         risk_score = min(risk_score, 1.0)
         logger.debug(f"General rule-based risk score: {risk_score:.2f}, Evidence: {evidence}")
         return risk_score, evidence
 
     def evaluate_critical_rules(self, patient_data: Dict[str, Any]) -> tuple[bool, float, list[str]]:
-        """
-        Evaluates critical liver health rules that might indicate severe,
-        immediate concern, overriding general risk.
-        Returns (is_critical: bool, critical_risk_score: float, critical_evidence: list)
-        """
         is_critical = False
         critical_risk_score = 0.0
         critical_evidence = []
 
-        # Use .get with default values to safely handle potentially missing data
         alt = patient_data.get('ALT', NORMAL_RANGES['ALT']['min'])
         ast = patient_data.get('AST', NORMAL_RANGES['AST']['min'])
         albumin = patient_data.get('Albumin', NORMAL_RANGES['Albumin']['max'])
@@ -272,8 +318,6 @@ class HepatitisCRuleBasedSystem:
 
         logger.debug(f"Evaluating critical rules for patient data: {patient_data}")
 
-        # Rule 1: Extreme LFT elevations (Acute Liver Failure/Severe Hepatitis)
-        # Using a higher threshold for "critical" elevation (e.g., 10x normal)
         if self.kb.is_lft_elevated('ALT', alt) and alt > self.kb.normal_ranges['ALT']['max'] * 10:
             is_critical = True
             critical_risk_score = max(critical_risk_score, 0.95)
@@ -286,17 +330,13 @@ class HepatitisCRuleBasedSystem:
             critical_evidence.append(f"Extremely High AST ({ast} U/L) - Suggests severe acute liver injury.")
             logger.debug("Critical Rule 1 (AST) triggered.")
 
-        # Rule 2: Signs of Liver Decompensation (Cirrhosis complications)
-        # Low Albumin + High Bilirubin + Low Platelets are strong indicators
         if (albumin < 3.0 and bilirubin > 2.5 and platelets < 100):
             is_critical = True
             critical_risk_score = max(critical_risk_score, 0.98)
             critical_evidence.append(f"Combination of Low Albumin ({albumin} g/dL), High Bilirubin ({bilirubin} mg/dL), and Low Platelets ({platelets} x10^9/L) - Strong indicators of liver decompensation/cirrhosis complications.")
             logger.debug("Critical Rule 2 (Decompensation) triggered.")
 
-        # Rule 3: AST/ALT Ratio > 2 with other signs (e.g., severe alcoholic hepatitis, advanced cirrhosis)
-        # This is often associated with alcoholic liver disease but can occur in advanced cirrhosis of any etiology
-        if alt > 0: # Avoid division by zero
+        if alt > 0:
             ast_alt_ratio = ast / alt
             if ast_alt_ratio >= 2.0 and (bilirubin > 2.0 or albumin < 3.0):
                 is_critical = True
@@ -304,22 +344,19 @@ class HepatitisCRuleBasedSystem:
                 critical_evidence.append(f"AST/ALT Ratio of {ast_alt_ratio:.2f} (>=2.0) with other abnormalities (e.g., high bilirubin/low albumin) - Suggests severe liver disease, possibly alcoholic liver disease or advanced cirrhosis.")
                 logger.debug("Critical Rule 3 (AST/ALT Ratio) triggered.")
 
-        # Rule 4: Very low Albumin (severe synthetic dysfunction)
-        if albumin < 2.8: # Child-Pugh Class C range
+        if albumin < 2.8:
             is_critical = True
             critical_risk_score = max(critical_risk_score, 0.99)
             critical_evidence.append(f"Very Low Albumin ({albumin} g/dL) - Indicative of severe liver synthetic dysfunction.")
             logger.debug("Critical Rule 4 (Very Low Albumin) triggered.")
 
-        # Rule 5: High Viral Load with any signs of damage
         if hcv_rna > 100000 and (
             self.kb.is_lft_elevated('ALT', alt) or
             self.kb.is_lft_elevated('AST', ast) or
             self.kb.is_lft_elevated('Bilirubin', bilirubin)
         ):
-            # This rule flags active infection *with* liver damage, potentially critical if damage is significant
             is_critical = True
-            critical_risk_score = max(critical_risk_score, 0.85) # A high but not always highest critical score
+            critical_risk_score = max(critical_risk_score, 0.85)
             critical_evidence.append(f"Very High HCV Viral Load ({hcv_rna} IU/mL) with elevated LFTs - Indicates active infection causing liver damage.")
             logger.debug("Critical Rule 5 (High HCV Viral Load + Damage) triggered.")
 
@@ -328,34 +365,28 @@ class HepatitisCRuleBasedSystem:
 
 # --- Hybrid Diagnostic System ---
 class EnhancedHepatitisCDiagnosticSystem:
-    def __init__(self, ml_model, scaler, knowledge_base, rule_based_system):
+    # Changed ML_MODEL and SCALER to class properties for clarity
+    def __init__(self, ml_model, scaler):
         self.ml_model = ml_model
         self.scaler = scaler
-        self.kb = knowledge_base
-        self.rule_system = rule_based_system
+        self.kb = HepatitisCKnowledgeBase(NORMAL_RANGES)
+        self.rule_system = HepatitisCRuleBasedSystem(self.kb)
         logger.info("EnhancedHepatitisCDiagnosticSystem initialized.")
 
-    def _prepare_ml_features(self, patient_data: Dict[str, Any]) -> np.ndarray: # Changed return type to np.ndarray
-        """Prepares patient data for the ML model, handling missing features."""
+    def _prepare_ml_features(self, patient_data: Dict[str, Any]) -> np.ndarray:
         features_dict = {}
         for feature in ML_FEATURES:
-            # Use .get() with a default value (e.g., 0 or mean/median of training data)
-            # Gender: 0 for female, 1 for male. Convert string 'Sex' to int 'Gender'.
             if feature == 'Gender':
                 features_dict[feature] = 1 if patient_data.get('Sex', '').lower() == 'male' else 0
             elif feature == 'HCV_RNA_Viral_Load':
-                # Map boolean 'HCV_RNA_Detected' to a dummy viral load if viral load itself is missing
                 if patient_data.get('HCV_RNA_Detected') and patient_data.get(feature) is None:
-                    features_dict[feature] = 10000 # Assume a detectable but not necessarily high load
+                    features_dict[feature] = 10000
                 else:
-                    features_dict[feature] = patient_data.get(feature, 0) # Default to 0 if not provided
+                    features_dict[feature] = patient_data.get(feature, 0)
             else:
-                features_dict[feature] = patient_data.get(feature, 0) # Default for other numerical features
+                features_dict[feature] = patient_data.get(feature, 0)
         
-        # Create a DataFrame from the prepared dictionary
         features_df = pd.DataFrame([features_dict])
-        
-        # Ensure column order matches ML_FEATURES for scaler and model
         features_df = features_df[ML_FEATURES]
         
         scaled_data = self.scaler.transform(features_df)
@@ -363,7 +394,6 @@ class EnhancedHepatitisCDiagnosticSystem:
         return scaled_data
 
     def _determine_risk_level(self, score: float) -> RiskLevel:
-        """Maps a numerical risk score (0-1) to a RiskLevel enum."""
         if score >= 0.9:
             return RiskLevel.CRITICAL
         elif score >= 0.7:
@@ -376,10 +406,8 @@ class EnhancedHepatitisCDiagnosticSystem:
             return RiskLevel.VERY_LOW
 
     def _get_recommendation(self, overall_risk_level: RiskLevel, critical_evidence: List[str], hcv_detected: bool) -> str:
-        """Provides actionable recommendations based on risk level and specific findings."""
         recommendations = []
         
-        # General risk level recommendations
         if overall_risk_level == RiskLevel.CRITICAL:
             recommendations.append("URGENT: Immediate specialist consultation (Hepatologist/Gastroenterologist) and further diagnostic tests (e.g., liver biopsy, FibroScan, advanced imaging) are highly recommended. Hospitalization may be necessary for stabilization and management of liver decompensation.")
         elif overall_risk_level == RiskLevel.HIGH:
@@ -391,7 +419,6 @@ class EnhancedHepatitisCDiagnosticSystem:
         elif overall_risk_level == RiskLevel.VERY_LOW:
             recommendations.append("General health advice. No immediate liver-specific concerns based on current data. Continue routine health check-ups.")
 
-        # Specific additions based on critical findings or HCV detection
         if critical_evidence:
             recommendations.append(f"Specific critical findings detected: {'; '.join(critical_evidence)}.")
 
@@ -403,16 +430,19 @@ class EnhancedHepatitisCDiagnosticSystem:
         return " ".join(recommendations)
 
     def diagnose(self, patient_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Provides a dual diagnosis for Hepatitis C detection and general liver health risk.
-        """
         results = {}
         logger.info(f"Starting diagnosis for patient: {patient_data.get('Age', 'N/A')} y.o. {patient_data.get('Sex', 'N/A')}")
 
         # 1. Hepatitis C Detection (ML Model)
         processed_data_ml = self._prepare_ml_features(patient_data)
-        ml_prediction_proba = self.ml_model.predict_proba(processed_data_ml)[0][1] # Probability of HCV_Positive (class 1)
-        ml_prediction_class = self.ml_model.predict(processed_data_ml)[0]
+        
+        # Use the appropriate model based on availability (TensorFlow or RandomForest)
+        if self.ml_model == hepatitis_c_tf_model:
+            ml_prediction_proba = self.ml_model.predict(processed_data_ml)[0][0]
+            ml_prediction_class = 1 if ml_prediction_proba >= 0.5 else 0
+        else: # Assumes RandomForest or another scikit-learn model
+            ml_prediction_proba = self.ml_model.predict_proba(processed_data_ml)[0][1]
+            ml_prediction_class = self.ml_model.predict(processed_data_ml)[0]
 
         hcv_detected = bool(ml_prediction_class)
         results['hepatitis_c_detected_ml'] = hcv_detected
@@ -432,15 +462,11 @@ class EnhancedHepatitisCDiagnosticSystem:
         logger.debug(f"Rule-based general risk: {rule_risk_score:.4f}, Critical: {is_critical} (Score: {critical_risk_from_rules:.4f})")
 
         # 3. Hybrid Aggregation for Overall Liver Health Risk
-        # If critical rules fire, they take precedence for the overall risk score
         if is_critical:
             final_overall_risk_score = max(critical_risk_from_rules, ml_prediction_proba, rule_risk_score)
             results['overall_decision_method'] = "Rule-based (Critical Override)"
-            # Combine critical evidence first, then add general evidence that is not already covered
-            results['overall_evidence'] = list(set(critical_evidence + rule_evidence)) 
+            results['overall_evidence'] = list(set(critical_evidence + rule_evidence))
         else:
-            # If no critical rules, combine ML and rule-based scores
-            # Assign weights (can be tuned)
             ml_weight = 0.6
             rule_weight = 0.4
             final_overall_risk_score = (ml_prediction_proba * ml_weight) + (rule_risk_score * rule_weight)
@@ -449,18 +475,15 @@ class EnhancedHepatitisCDiagnosticSystem:
 
         results['final_overall_risk_score'] = float(f"{final_overall_risk_score:.4f}")
         
-        # --- FIX APPLIED HERE: Convert RiskLevel enum to its string value ---
         risk_level_enum = self._determine_risk_level(final_overall_risk_score)
-        results['overall_health_risk_level'] = risk_level_enum.value # Store the string value
-        # Retain overall_health_risk_level_label for clarity if needed, though it's now redundant
+        results['overall_health_risk_level'] = risk_level_enum.value
         results['overall_health_risk_level_label'] = risk_level_enum.value
-        # --- END FIX ---
 
         logger.info(f"Final Overall Liver Health Risk: '{results['overall_health_risk_level_label']}' (Score: {results['final_overall_risk_score']:.4f})")
 
         # 4. Generate Recommendation
         results['recommendation'] = self._get_recommendation(
-            risk_level_enum, # Pass the actual enum for recommendation logic
+            risk_level_enum,
             critical_evidence,
             hcv_detected
         )
@@ -469,10 +492,21 @@ class EnhancedHepatitisCDiagnosticSystem:
         return results
 
 # --- Global instance of the diagnostic system ---
-# This ensures the model and scaler are loaded only once.
+# We instantiate this after loading the artifacts
 knowledge_base_global = HepatitisCKnowledgeBase(NORMAL_RANGES)
 rule_based_system_global = HepatitisCRuleBasedSystem(knowledge_base_global)
-hepatitis_c_diagnostic_system = EnhancedHepatitisCDiagnosticSystem(ML_MODEL, SCALER, knowledge_base_global, rule_based_system_global)
+
+# Use the loaded global artifacts to initialize the diagnostic system
+# We prioritize the TensorFlow model if available, otherwise use the RandomForest model
+if hepatitis_c_tf_model:
+    ml_model_to_use = hepatitis_c_tf_model
+else:
+    ml_model_to_use = hepatitis_c_rf_model
+
+hepatitis_c_diagnostic_system = EnhancedHepatitisCDiagnosticSystem(
+    ml_model=ml_model_to_use, 
+    scaler=hepatitis_c_scaler
+)
 
 # --- Expose the prediction function for app.py to import ---
 def predict_hepatitis_c(patient_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -481,12 +515,15 @@ def predict_hepatitis_c(patient_data: Dict[str, Any]) -> Dict[str, Any]:
     This function is intended to be called by the Flask API.
     """
     try:
+        if hepatitis_c_diagnostic_system.ml_model is None or hepatitis_c_diagnostic_system.scaler is None:
+            raise RuntimeError("Hepatitis C model artifacts are not available.")
+
         diagnosis_results = hepatitis_c_diagnostic_system.diagnose(patient_data)
         return diagnosis_results
     except Exception as e:
-        logger.error(f"Error during Hepatitis C prediction: {e}")
+        logger.error(f"Error during Hepatitis C prediction: {e}", exc_info=True)
         # Return an error structure that app.py can handle
-        return {"error": "Prediction failed", "details": str(e)}
+        return {"error": "Prediction failed", "details": str(e), "status_code": 500}
 
 # --- Main Execution Block (for direct testing of this script) ---
 if __name__ == "__main__":
@@ -498,77 +535,29 @@ if __name__ == "__main__":
         'PreviousMedicalConditions': 0, 'FamilyHistory': 0, 'ALT': 25, 'AST': 20, 'ALP': 80,
         'Bilirubin': 0.8, 'Albumin': 4.5, 'Platelets': 250, 'HCV_RNA_Viral_Load': 0
     }
-
-    patient_data_2 = { # Moderate risk, potential HCV
-        'Age': 45, 'Sex': 'male', 'BMI': 28.0, 'Smoking': 1, 'AlcoholConsumption': 30,
-        'PreviousMedicalConditions': 1, 'FamilyHistory': 1, 'ALT': 70, 'AST': 60, 'ALP': 150,
-        'Bilirubin': 1.5, 'Albumin': 3.8, 'Platelets': 180, 'HCV_RNA_Viral_Load': 15000
-    }
-
-    patient_data_3 = { # High risk, confirmed HCV
-        'Age': 55, 'Sex': 'female', 'BMI': 31.0, 'Smoking': 0, 'AlcoholConsumption': 10,
-        'PreviousMedicalConditions': 1, 'FamilyHistory': 1, 'ALT': 120, 'AST': 100, 'ALP': 200,
-        'Bilirubin': 2.5, 'Albumin': 3.2, 'Platelets': 120, 'HCV_RNA_Viral_Load': 500000
-    }
-
-    patient_data_4 = { # Critical risk (severe LFTs), but low/no HCV viral load - High Alcohol
-        'Age': 60, 'Sex': 'male', 'BMI': 25.0, 'Smoking': 0, 'AlcoholConsumption': 70,
-        'PreviousMedicalConditions': 1, 'FamilyHistory': 0, 'ALT': 50, 'AST': 180, 'ALP': 300,
-        'Bilirubin': 5.0, 'Albumin': 2.7, 'Platelets': 80, 'HCV_RNA_Viral_Load': 500
-    }
-
-    patient_data_5 = { # Critical from rules, even with low HCV_RNA (AST/ALT ratio, low ALB, low platelets, high BIL)
-        'Age': 68, 'Sex': 'female', 'BMI': 29.0, 'Smoking': 1, 'AlcoholConsumption': 40,
-        'PreviousMedicalConditions': 1, 'FamilyHistory': 1, 'ALT': 30, 'AST': 90, # AST/ALT ratio = 3.0
-        'ALP': 180, 'Bilirubin': 3.5, 'Albumin': 2.9, 'Platelets': 95,
-        'HCV_RNA_Viral_Load': 800
+    
+    patient_data_2 = { # Moderate risk, potential for HCV
+        'Age': 50, 'Sex': 'male', 'BMI': 31.0, 'Smoking': 1, 'AlcoholConsumption': 30,
+        'PreviousMedicalConditions': 1, 'FamilyHistory': 0, 'ALT': 65, 'AST': 55, 'ALP': 150,
+        'Bilirubin': 1.5, 'Albumin': 3.8, 'Platelets': 140, 'HCV_RNA_Viral_Load': 100000
     }
     
-    patient_data_6 = { # Critical risk due to extremely high ALT (e.g., acute drug-induced liver injury, not necessarily HCV)
-        'Age': 40, 'Sex': 'male', 'BMI': 24.0, 'Smoking': 0, 'AlcoholConsumption': 0,
-        'PreviousMedicalConditions': 0, 'FamilyHistory': 0, 'ALT': 800, 'AST': 400, 'ALP': 100,
-        'Bilirubin': 1.5, 'Albumin': 4.0, 'Platelets': 280, 'HCV_RNA_Viral_Load': 0
+    # Critical risk case
+    patient_data_3 = {
+        'Age': 60, 'Sex': 'male', 'BMI': 25.0, 'Smoking': 1, 'AlcoholConsumption': 80,
+        'PreviousMedicalConditions': 1, 'FamilyHistory': 1, 'ALT': 500, 'AST': 1200, 'ALP': 300,
+        'Bilirubin': 5.5, 'Albumin': 2.5, 'Platelets': 80, 'HCV_RNA_Viral_Load': 500000
     }
+    
+    # Run tests and print results
+    print("\n--- Test Case 1: Low Risk Patient ---")
+    result_1 = predict_hepatitis_c(patient_data_1)
+    print(f"Prediction Result: {result_1}")
 
-    # Test case for missing values (will use defaults in _prepare_ml_features and rule system)
-    patient_data_7 = { 
-        'Age': 50, 'Sex': 'female', 'BMI': 27.0, 'Smoking': 0, 'AlcoholConsumption': 10,
-        # Missing ALT, AST, ALB, etc. to demonstrate default handling
-        'HCV_RNA_Viral_Load': 0 
-    }
+    print("\n--- Test Case 2: Moderate Risk Patient with potential HCV ---")
+    result_2 = predict_hepatitis_c(patient_data_2)
+    print(f"Prediction Result: {result_2}")
 
-
-    test_patients = {
-        "Patient 1 (Low Risk)": patient_data_1,
-        "Patient 2 (Moderate Risk / Potential HCV)": patient_data_2,
-        "Patient 3 (High Risk / Confirmed HCV)": patient_data_3,
-        "Patient 4 (Critical Risk / Severe Liver Damage, High Alcohol)": patient_data_4,
-        "Patient 5 (Critical Risk / Severe Liver Damage, Low HCV)": patient_data_5,
-        "Patient 6 (Critical Risk / Extremely High ALT)": patient_data_6,
-        "Patient 7 (Missing Data Test)" : patient_data_7
-    }
-
-    for name, data in test_patients.items():
-        print(f"\n--- Diagnosing {name} ---")
-        diagnosis_results = predict_hepatitis_c(data) # Use the exposed function
-
-        # Print the key diagnosis results clearly
-        print(f"Hepatitis C Diagnosis (ML): {diagnosis_results.get('hepatitis_c_diagnosis_label', 'N/A')} (Probability: {diagnosis_results.get('ml_probability_hcv', 'N/A'):.2f})")
-        print(f"Overall Liver Health Risk: {diagnosis_results.get('overall_health_risk_level', 'N/A')} (Score: {diagnosis_results.get('final_overall_risk_score', 'N/A'):.2f})")
-        print(f"Decision Method for Overall Risk: {diagnosis_results.get('overall_decision_method', 'N/A')}")
-            
-        print("\n--- Detailed Interpretation ---")
-        print("Contributing Factors/Evidence:")
-        if diagnosis_results.get('overall_evidence'):
-            for factor in diagnosis_results['overall_evidence']:
-                print(f"   - {factor}")
-        else:
-            print("   No specific contributing factors identified or data was insufficient.")
-
-        if diagnosis_results.get('is_critical_from_rules'):
-            print("Critical Rule(s) Triggered! (This significantly influenced overall risk):")
-            for crit_factor in diagnosis_results.get('critical_evidence', []):
-                print(f"   - CRITICAL: {crit_factor}")
-            
-        print(f"\nRecommendation: {diagnosis_results.get('recommendation', 'N/A')}")
-        print("\n" + "=" * 60 + "\n")
+    print("\n--- Test Case 3: Critical Risk Patient ---")
+    result_3 = predict_hepatitis_c(patient_data_3)
+    print(f"Prediction Result: {result_3}")

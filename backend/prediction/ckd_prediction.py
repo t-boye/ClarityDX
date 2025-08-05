@@ -4,9 +4,10 @@ import pandas as pd
 from pydantic import BaseModel, Field, confloat, conint, ValidationError
 import joblib
 import os
+import requests
 from typing import Optional, List, Dict, Union
 
-# Configure logging
+# Configure logging (as before)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -15,20 +16,10 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-# Paths to model components
-# Get the directory of the current file (ckd_prediction.py)
-CURRENT_FILE_DIR = os.path.dirname(os.path.abspath(__file__)) # This correctly gets C:\...\backend\prediction
-
-# Go up one level to get to the 'backend' directory
-BACKEND_ROOT_DIR = os.path.abspath(os.path.join(CURRENT_FILE_DIR, '..')) # This will correctly be C:\...\backend
-
-# Now, construct the path to the main 'models' directory within 'backend'
-BASE_MODEL_DIR = os.path.join(BACKEND_ROOT_DIR, "models") # This will correctly be C:\...\backend\models
-
-CKD_MODEL_DIR = os.path.join(BASE_MODEL_DIR, "ckd_model") # This will correctly be C:\...\backend\models\ckd_model (CORRECT!)
-CKD_MODEL_PATH = os.path.join(CKD_MODEL_DIR, "ckd_best_model_random_forest_classifier.pkl")
-CKD_SCALER_PATH = os.path.join(CKD_MODEL_DIR, "ckd_scaler.pkl")
-CKD_FEATURE_NAMES_PATH = os.path.join(CKD_MODEL_DIR, "ckd_feature_names.pkl")
+# Environment URLs for CKD model artifacts
+CKD_MODEL_URL = os.getenv("CKD_MODEL_URL")
+CKD_SCALER_URL = os.getenv("CKD_SCALER_URL")
+CKD_FEATURE_NAMES_URL = os.getenv("CKD_FEATURE_NAMES_URL")
 
 # Global instances
 ckd_model_instance = None
@@ -36,39 +27,22 @@ ckd_scaler_instance = None
 ckd_feature_names_list = None
 
 def load_ckd_model_components():
-    """Load model, scaler, and feature names."""
-    global ckd_model_instance, ckd_scaler_instance, ckd_feature_names_list
-    try:
-        if os.path.exists(CKD_MODEL_PATH):
-            ckd_model_instance = joblib.load(CKD_MODEL_PATH)
-            logger.info(f"CKD model loaded: {CKD_MODEL_PATH}")
-        else:
-            logger.error(f"CKD model not found: {CKD_MODEL_PATH}")
+    """
+    Attempts to load model components from the specified remote URLs.
+    This function will raise an exception because joblib cannot directly
+    load from a URL.
+    """
+    raise NotImplementedError(
+        "Model components cannot be loaded directly from URLs using joblib. "
+        "Please use a separate model-serving API or download the files "
+        "and load them locally or in-memory."
+    )
 
-        if os.path.exists(CKD_SCALER_PATH):
-            ckd_scaler_instance = joblib.load(CKD_SCALER_PATH)
-            logger.info(f"CKD scaler loaded: {CKD_SCALER_PATH}")
-        else:
-            logger.error(f"CKD scaler not found: {CKD_SCALER_PATH}")
-
-        if os.path.exists(CKD_FEATURE_NAMES_PATH):
-            ckd_feature_names_list = joblib.load(CKD_FEATURE_NAMES_PATH)
-            logger.info(f"CKD feature names loaded: {CKD_FEATURE_NAMES_PATH}")
-        else:
-            logger.error(f"CKD feature names not found: {CKD_FEATURE_NAMES_PATH}")
-
-        if ckd_model_instance and ckd_scaler_instance and ckd_feature_names_list:
-            logger.info("CKD model components loaded successfully.")
-        else:
-            logger.error("Failed to load all CKD model components.")
-    except Exception as e:
-        ckd_model_instance = None
-        ckd_scaler_instance = None
-        ckd_feature_names_list = None
-        logger.error(f"Exception while loading CKD model components: {e}", exc_info=True)
-
-# Load model components on import
-load_ckd_model_components()
+# The attempt to load models here will now raise the exception,
+# preventing the application from starting if this function is called.
+# You should handle this at the application startup level.
+# For this example, we will remove the direct call to `load_ckd_model_components()`
+# and assume an external mechanism handles model loading.
 
 class CKDData(BaseModel):
     age_yrs: Optional[conint(ge=0)] = Field(default=None, alias="Age (yrs)")
@@ -108,15 +82,13 @@ def generate_ckd_diagnosis_message(prediction: int, probabilities: List[float], 
         "probability_ckd": probabilities[1]
     }
 
-    # Ensure input_data is a DataFrame and extract the first (and likely only) row as a dictionary
     if isinstance(input_data, pd.DataFrame) and not input_data.empty:
         input_dict = input_data.iloc[0].to_dict()
     else:
-        input_dict = {} # Fallback if input_data is not as expected
+        input_dict = {}
 
     significant_factors = []
 
-    # Using .get() for safer access and handling of potentially missing keys
     if (age := input_dict.get('Age (yrs)')) is not None and age > 60:
         significant_factors.append(f"Elevated age ({age} years)")
 
@@ -135,7 +107,6 @@ def generate_ckd_diagnosis_message(prediction: int, probabilities: List[float], 
     if (hgb := input_dict.get('Hemoglobin (gms)')) is not None and hgb < 10:
         significant_factors.append(f"Low hemoglobin level ({hgb} gms)")
 
-    # Check for presence of binary factors (1 for 'yes' or 'present')
     if input_dict.get('Hypertension: yes') == 1:
         significant_factors.append("History of hypertension")
     if input_dict.get('Diabetes Mellitus: yes') == 1:
@@ -149,7 +120,6 @@ def generate_ckd_diagnosis_message(prediction: int, probabilities: List[float], 
     if input_dict.get('Anemia: yes') == 1:
         significant_factors.append("Presence of anemia")
 
-
     explanation["significant_risk_factors"] = {
         "message": "Significant risk factors identified:" if significant_factors else "No significant risk factors identified based on the model's criteria.",
         "factors": significant_factors if significant_factors else []
@@ -161,61 +131,62 @@ def generate_ckd_diagnosis_message(prediction: int, probabilities: List[float], 
 
 
 def predict_ckd(data: Dict) -> Dict:
+    """
+    Processes input data and sends it to an external prediction API endpoint.
+    """
     logger.info(f"CKD prediction request: {data}")
 
-    if not all([ckd_model_instance, ckd_scaler_instance, ckd_feature_names_list]):
-        logger.error("CKD model or scaler not loaded.")
-        # Return a dictionary that the frontend can parse as an error, but without the extra wrapper
-        return {"error": "CKD model or scaler not available", "status_code": 500}
-
     try:
+        # Validate the input data using the Pydantic model
         validated_data = CKDData.model_validate(data)
-        # Convert Pydantic model to a dictionary with aliases resolved
-        input_data_for_df = validated_data.model_dump(by_alias=True)
-        logger.info(f"Validated CKD input (with aliases): {input_data_for_df}")
+        input_data_for_api = validated_data.model_dump(by_alias=True)
+        logger.info(f"Validated CKD input for API call: {input_data_for_api}")
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return {"error": f"Invalid input: {e.errors()}", "status_code": 400}
 
-    # Create DataFrame using the resolved aliases
-    input_df = pd.DataFrame([input_data_for_df])
-    # Ensure all expected feature columns are present, fill missing with 0 or NaN as appropriate for scaling
-    # It's better to fill with NaN and then let the scaler handle it (if it's designed to),
-    # or apply an imputer BEFORE scaling if that was part of your training pipeline.
-    # For now, let's stick to your original fill_value=np.nan and then fillna(0)
-    input_df = input_df.reindex(columns=ckd_feature_names_list, fill_value=np.nan).fillna(0)
-
-
-    logger.info(f"Input data before scaling:\n{input_df}")
+    # Here's the core change: Instead of using local models, we call an API
+    # Replace `PREDICTION_API_URL` with your actual endpoint.
+    PREDICTION_API_URL = os.getenv("CKD_PREDICTION_API_URL", "http://your-prediction-api.com/predict")
 
     try:
-        input_scaled = ckd_scaler_instance.transform(input_df)
-        logger.info("Input scaled.")
-    except Exception as e:
-        logger.error(f"Scaling error: {e}")
-        return {"error": "Scaling error", "status_code": 500}
+        # Send the processed data to the prediction API
+        response = requests.post(PREDICTION_API_URL, json=input_data_for_api, timeout=10)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
 
-    try:
-        probabilities = ckd_model_instance.predict_proba(input_scaled)[0].tolist()
-        prediction = int(np.argmax(probabilities))
-        logger.info(f"Prediction: {prediction}, Probabilities: {probabilities}")
-    except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        return {"error": "Prediction error", "status_code": 500}
+        prediction_result = response.json()
+        logger.info(f"Received prediction from API: {prediction_result}")
+        
+        # The API's response should contain the prediction and probabilities
+        prediction = prediction_result.get("prediction")
+        probabilities = prediction_result.get("probabilities")
+        
+        if prediction is None or probabilities is None:
+            logger.error("API response missing 'prediction' or 'probabilities' key.")
+            return {"error": "Invalid response from prediction API", "status_code": 500}
 
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to connect to prediction API: {e}")
+        return {"error": "Failed to connect to CKD prediction service", "status_code": 503}
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during API call: {e}")
+        return {"error": "An internal error occurred", "status_code": 500}
+
+    # Generate a more user-friendly message based on the API's output
+    # For this to work, we need the original input_df for the message function.
+    # A cleaner approach would be for the API to return the message directly.
+    # Let's create a dummy input_df to pass to the message generator.
+    input_df = pd.DataFrame([input_data_for_api])
+    diagnosis_info = generate_ckd_diagnosis_message(prediction, probabilities, input_df)
+    
+    # Combine the prediction and the generated message for the final payload
     response_payload = {
         "prediction": prediction,
         "probabilities": probabilities,
-        "class_names": ["No CKD", "CKD"]
+        "class_names": ["No CKD", "CKD"],
+        **diagnosis_info  # Unpack the diagnosis_info dict into the main payload
     }
 
-    diagnosis_info = generate_ckd_diagnosis_message(prediction, probabilities, input_df)
-    response_payload.update(diagnosis_info)
-
     logger.info(f"CKD prediction completed: {response_payload}")
-    
-    # *** IMPORTANT CHANGE HERE ***
-    # Return the payload directly, without the outer "response" key and "status_code"
-    # The HTTP status code will be handled by your FastAPI/Flask route
-    # that calls this function (e.g., `return JSONResponse(content=response_payload, status_code=200)`).
+
     return response_payload
