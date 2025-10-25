@@ -5,11 +5,11 @@
 
 const BASE_API_URL = import.meta.env.VITE_API_BASE_URL ||
                      (import.meta.env.MODE === 'production'
-                       ? '/.netlify/functions'
-                       : 'http://localhost:8888/.netlify/functions');
+                       ? '/api'
+                       : 'http://localhost:8888/api');
 
 if (!BASE_API_URL) {
-  console.warn("VITE_API_BASE_URL is not defined. Using default Netlify Functions URL.");
+  console.warn("VITE_API_BASE_URL is not defined. Using default API URL.");
 }
 
 console.info(`API Base URL: ${BASE_API_URL}`);

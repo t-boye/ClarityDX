@@ -28,7 +28,7 @@ DATABASE_URL=postgresql://postgres:password@db.xxxxxxxxxxxxx.supabase.co:5432/po
 ### Frontend Variables (Required for Vite build)
 
 ```
-VITE_API_BASE_URL=/.netlify/functions
+VITE_API_BASE_URL=/api
 VITE_FIREBASE_API_KEY=AIzaSyAci2wbrmgtwNpJe1RmiInRodoYN3yxSM8
 VITE_FIREBASE_AUTH_DOMAIN=expert-system-12901.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=expert-system-12901
