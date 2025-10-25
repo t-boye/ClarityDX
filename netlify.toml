@@ -1,0 +1,92 @@
+# Netlify Configuration for ClarityDx
+# Multi-Disease Diagnosis System with Serverless Backend
+
+[build]
+  # Frontend build configuration
+  base = "frontend/"
+  command = "npm run build"
+  publish = "dist"
+
+  # Netlify Functions configuration (relative to base directory)
+  functions = "netlify/functions"
+
+# Environment variables (set these in Netlify dashboard)
+# VITE_API_BASE_URL
+# DATABASE_URL
+# All Firebase variables
+# AWS credentials for model loading
+
+# API routes redirect to specific Netlify Functions
+# Prediction endpoints
+[[redirects]]
+  from = "/api/predict/heart_disease"
+  to = "/.netlify/functions/predict-heart-disease"
+  status = 200
+
+[[redirects]]
+  from = "/api/predict/ckd"
+  to = "/.netlify/functions/predict-ckd"
+  status = 200
+
+[[redirects]]
+  from = "/api/predict/hepatitis_c"
+  to = "/.netlify/functions/predict-hepatitis-c"
+  status = 200
+
+[[redirects]]
+  from = "/api/predict/symscan"
+  to = "/.netlify/functions/predict-symscan"
+  status = 200
+
+# Image processing endpoint
+[[redirects]]
+  from = "/api/image-processing/process-image"
+  to = "/.netlify/functions/process-malaria-image"
+  status = 200
+
+# Patient management endpoints
+[[redirects]]
+  from = "/api/patients/:id"
+  to = "/.netlify/functions/patients/:id"
+  status = 200
+
+[[redirects]]
+  from = "/api/patients"
+  to = "/.netlify/functions/patients"
+  status = 200
+
+# Encounter management endpoints
+[[redirects]]
+  from = "/api/patients/:patient_id/encounters"
+  to = "/.netlify/functions/encounters/:patient_id"
+  status = 200
+
+[[redirects]]
+  from = "/api/encounters/:id"
+  to = "/.netlify/functions/encounters/:id"
+  status = 200
+
+# Record management endpoints
+[[redirects]]
+  from = "/api/encounters/:encounter_id/records"
+  to = "/.netlify/functions/records/:encounter_id"
+  status = 200
+
+[[redirects]]
+  from = "/api/records/:id"
+  to = "/.netlify/functions/records/:id"
+  status = 200
+
+# Redirect all frontend routes to index.html for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for CORS
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"

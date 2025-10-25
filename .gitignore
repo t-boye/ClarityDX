@@ -64,6 +64,13 @@ node_modules/
 */site-packages/tensorflow/
 
 # --------------------------
+# Netlify
+# --------------------------
+.netlify/
+frontend/netlify/functions/__pycache__/
+frontend/netlify/functions/**/__pycache__/
+
+# --------------------------
 # SQLite or Local DBs
 # --------------------------
 *.sqlite3
