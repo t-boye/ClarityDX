@@ -164,6 +164,17 @@ const Header = () => {
                 Home
               </Link>
 
+              {/* Patients Link */}
+              {user && (
+                <Link
+                  to="/dashboard"
+                  className="flex items-center text-base font-medium text-gray-700 hover:text-blue-600 transition-colors group"
+                >
+                  <FaProcedures className="mr-2 text-gray-500 group-hover:text-blue-600 text-sm" />
+                  Patients
+                </Link>
+              )}
+
               <Popover className="relative">
                 {({ open }) => (
                   <>
@@ -564,6 +575,18 @@ const Header = () => {
                   <FaHome className="mr-2 text-blue-600 text-sm" />
                   Home
                 </Link>
+
+                {/* Patients Link - Mobile */}
+                {user && (
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="-mx-2 flex items-center rounded-lg px-2 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50 transition-colors"
+                  >
+                    <FaProcedures className="mr-2 text-blue-600 text-sm" />
+                    Patients
+                  </Link>
+                )}
 
                 <Popover className="relative">
                   {({ open }) => (

@@ -117,7 +117,7 @@ function SymScanPredictor() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/predict/symscan`, {
+      const response = await fetch(`${API_BASE_URL}/predict/symscan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symptoms }),

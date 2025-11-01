@@ -13,7 +13,7 @@ import re
 # Add shared modules to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'shared'))
 
-from utils.db_utils import (
+from db_utils import (
     get_db_connection,
     put_db_connection,
     create_record,
@@ -148,7 +148,13 @@ def update_existing_record(conn, record_id, event, headers):
     """Update a record"""
     try:
         body = json.loads(event['body']) if isinstance(event.get('body'), str) else event.get('body', {})
-        updated = update_record(conn=conn, record_id=record_id, update_data=body)
+        updated = update_record(
+            conn=conn,
+            record_id=record_id,
+            record_date=body.get('record_date'),
+            details=body.get('details'),
+            user_id=body.get('user_id')
+        )
 
         if updated > 0:
             record = fetch_record_by_id(conn=conn, record_id=record_id)

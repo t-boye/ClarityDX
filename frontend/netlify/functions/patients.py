@@ -13,7 +13,7 @@ import re
 # Add shared modules to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'shared'))
 
-from utils.db_utils import (
+from db_utils import (
     get_db_connection,
     put_db_connection,
     create_patient,
@@ -259,7 +259,14 @@ def update_existing_patient(conn, patient_id, event, headers):
             }
 
         # Update patient
-        updated_rows = update_patient(conn=conn, patient_id=patient_id, update_data=body)
+        updated_rows = update_patient(
+            conn=conn,
+            patient_id=patient_id,
+            name=body.get('name'),
+            age=body.get('age'),
+            gender=body.get('gender'),
+            contact_info=body.get('contact_info')
+        )
 
         if updated_rows > 0:
             updated_patient = fetch_patient_by_id(conn=conn, patient_id=patient_id)

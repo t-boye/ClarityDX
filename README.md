@@ -467,8 +467,8 @@ This system should only be used:
 
 ## 📚 Documentation
 
-- **[`NETLIFY_DEPLOYMENT.md`](NETLIFY_DEPLOYMENT.md)** - Comprehensive Netlify deployment guide
-- **[`ENV_VARIABLES.md`](ENV_VARIABLES.md)** - Environment variables configuration
+- **[`docs/ NETLIFY_DEPLOYMENT.md`](NETLIFY_DEPLOYMENT.md)** - Comprehensive Netlify deployment guide
+- **[`docs/ ENV_VARIABLES.md`](ENV_VARIABLES.md)** - Environment variables configuration
 
 ---
 

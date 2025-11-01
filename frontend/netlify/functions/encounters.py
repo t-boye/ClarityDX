@@ -14,7 +14,7 @@ from datetime import datetime
 # Add shared modules to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'shared'))
 
-from utils.db_utils import (
+from db_utils import (
     get_db_connection,
     put_db_connection,
     create_encounter,
@@ -181,7 +181,15 @@ def update_existing_encounter(conn, encounter_id, event, headers):
     """Update an encounter"""
     try:
         body = json.loads(event['body']) if isinstance(event.get('body'), str) else event.get('body', {})
-        updated_rows = update_encounter(conn=conn, encounter_id=encounter_id, update_data=body)
+        updated_rows = update_encounter(
+            conn=conn,
+            encounter_id=encounter_id,
+            encounter_date=body.get('encounter_date'),
+            encounter_time=body.get('encounter_time'),
+            chief_complaint=body.get('chief_complaint'),
+            notes=body.get('notes'),
+            user_id=body.get('user_id')
+        )
 
         if updated_rows > 0:
             updated = fetch_encounter_by_id(conn=conn, encounter_id=encounter_id)
