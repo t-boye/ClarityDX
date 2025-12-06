@@ -14,40 +14,28 @@ import tensorflow as tf
 import numpy as np
 from io import BytesIO
 
-# --- Define PROJECT_ROOT explicitly for app.py ---
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-# --- Import db and migrate from your extensions.py ---
 from extensions import db, migrate
-
-# Load environment variables early
 from dotenv import load_dotenv
 load_dotenv()
 
-# --- Configure Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# --- Import prediction modules ---
-# The old import for EnhancedHeartDiseaseDiagnosticSystem is removed.
-# The new predict_symscan function is imported.
 from prediction.malaria_prediction import predict_malaria
 from prediction.ckd_prediction import predict_ckd
 from prediction.heart_disease_prediction import predict_heart_disease
 from prediction.hepatitis_c_prediction import predict_hepatitis_c
 from prediction.sysscan_prediction import predict_symscan
 
-# --- Import MODEL_URLS from model_config.py ---
 from model_config import MODEL_URLS
-# --- Import image processing service function ---
 from services.image_processing_service import process_image as process_malaria_image_data
 
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# --- Flask-SQLAlchemy Configuration ---
 db_name = os.environ.get("DB_NAME")
 db_user = os.environ.get("DB_USER")
 db_password = os.environ.get("DB_PASSWORD")
@@ -63,31 +51,22 @@ required_env_vars = {
 
 for var, value in required_env_vars.items():
     if value is None:
-        logger.error(f"Environment variable {var} is not set. Please check your .env file or environment configuration.")
-        # Consider exiting or raising an error if essential DB vars are missing
+        logger.error(f"Environment variable {var} is not set.")
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Initialize extensions
 db.init_app(app)
 migrate.init_app(app, db)
 logger.info("Flask-SQLAlchemy and Flask-Migrate initialized.")
 
-# Import your models AFTER db is initialized
 from models import Patient, Encounter, Record
 
 from errors import DatabaseError, PatientNotFoundError, EncounterNotFoundError, RecordNotFoundError
 
-# Register blueprints
 from patient_encounter_routes import patient_encounter_bp
 app.register_blueprint(patient_encounter_bp)
 
-# --- ================================================================================================== --- #
-# --- Centralized Model and Artifact Loading Logic ---
-# --- ================================================================================================== --- #
-
-# --- Global dictionary to hold all loaded models and auxiliary data ---
 loaded_models: Dict[str, Any] = {}
 
 def download_and_load_joblib(url: str) -> Any:
@@ -169,14 +148,8 @@ def initialize_all_models():
             except OSError as e:
                 logger.warning(f"Error removing temporary directory {temp_dir}: {e}")
 
-# Load models at app context start
 with app.app_context():
     initialize_all_models()
-
-# --- ================================================================================================== --- #
-# --- NLTK Setup ---
-# This part remains the same as it's a prerequisite for SymScan processing
-# --- ================================================================================================== --- #
 
 import nltk
 
@@ -205,9 +178,6 @@ from nltk.stem import WordNetLemmatizer
 lemmatizer = WordNetLemmatizer()
 stop_words = set(stopwords.words('english'))
 
-# Pydantic models remain the same
-# --- =================  --- #
-#===== Pydantic models ======#
 
 class HepatitisCData(BaseModel):
     Age: float = Field(..., alias="Age")
@@ -270,9 +240,6 @@ class CKDData(BaseModel):
 class SymScanData(BaseModel):
     symptoms: List[str] = Field(..., min_length=1, description="List of symptoms.")
 
-# --- ================================================================================================== --- #
-# --- API Endpoints ---
-# --- ================================================================================================== --- #
 
 @app.route('/api/image-processing/process-image', methods=['POST'])
 def process_malaria_image():
@@ -304,10 +271,8 @@ def predict(disease: str):
             logger.error("No JSON input provided for prediction.")
             return jsonify({"error": "No JSON input provided", "medical_disclaimer": "This system is informational only and not a substitute for professional medical advice."}), 400
 
-        # --- Heart Disease Prediction ---
         if disease == "heart_disease":
             try:
-                # Pydantic will now correctly expect 'age' (lowercase)
                 validated_numerical_data = HeartDiseaseData(**raw_json).model_dump()
                 
                 heart_disease_models = {
@@ -315,8 +280,7 @@ def predict(disease: str):
                     'scaler': loaded_models.get('heart_disease_scaler'),
                     'feature_names': loaded_models.get('heart_disease_feature_names')
                 }
-                
-                # Check for missing models
+
                 if not all(heart_disease_models.values()):
                      logger.error("Heart Disease model artifacts not loaded. Returning 503.")
                      return jsonify({"error": "Heart Disease model not available.", "medical_disclaimer": "..."}), 503
@@ -330,10 +294,8 @@ def predict(disease: str):
                 logger.exception(f"Error in Heart Disease prediction: {e}")
                 return jsonify({"error": "Internal error during Heart Disease prediction.", "details": str(e), "medical_disclaimer": "..."}), 500
 
-        # --- SymScan Prediction ---
         elif disease == "symscan":
             try:
-                # Pydantic validation is handled by the SymScan function internally
                 validated_data = SymScanData(**raw_json).model_dump()
                 user_symptoms = validated_data.get('symptoms')
                 
@@ -344,7 +306,6 @@ def predict(disease: str):
                     'precautions_map': loaded_models.get('symscan_precautions_map')
                 }
                 
-                # Check for missing models
                 if not all(symscan_models.values()):
                      logger.error("SymScan model artifacts not loaded. Returning 503.")
                      return jsonify({"error": "SymScan model not available.", "medical_disclaimer": "..."}), 503
@@ -358,7 +319,6 @@ def predict(disease: str):
                 logger.exception(f"SymScan prediction error: {e}")
                 return jsonify({"error": "Internal error during SymScan prediction", "details": str(e), "medical_disclaimer": "..."}), 500
 
-        # --- Other Diseases (CKD, Hepatitis C) ---
         elif disease == "ckd":
             try:
                 validated_data = CKDData(**raw_json).model_dump(by_alias=True)

@@ -1,0 +1,8 @@
+{
+  "name": "claritydx-functions",
+  "version": "1.0.0",
+  "dependencies": {
+    "pg": "^8.11.3",
+    "node-fetch": "^2.7.0"
+  }
+}

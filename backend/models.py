@@ -4,8 +4,6 @@ import random
 import string
 from extensions import db
 
-# --- Custom Exception Classes (Place them here, or in errors.py as discussed) ---
-# If you decide to put them in errors.py, remove them from here.
 class DatabaseError(Exception):
     """Custom exception for database-related errors."""
     pass
@@ -22,14 +20,9 @@ class RecordNotFoundError(Exception):
     """Custom exception for when a record is not found."""
     pass
 
-# --- Helper function for generating unique patient codes (MUST be before Patient class) ---
 def generate_unique_patient_code(prefix: str = "TSys") -> str:
     """Generates a unique patient code."""
-    # Ensure it's truly unique or handle collisions in the create_patient function
-    # For now, a simple random generation is sufficient
-    return f"{prefix}-{random.randint(100000, 999999)}" # Made it 6 digits for more uniqueness
-
-# --- SQLAlchemy Model Definitions (KEEP ONLY THESE DETAILED ONES) ---
+    return f"{prefix}-{random.randint(100000, 999999)}"
 
 class Patient(db.Model):
     __tablename__ = 'patients' # Explicitly define table name if different from class name

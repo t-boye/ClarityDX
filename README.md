@@ -7,7 +7,7 @@
 
 **AI-powered diagnostic assistant for Heart Disease, Chronic Kidney Disease, Hepatitis C, Malaria, and Symptom-based diagnosis**
 
-[Live Demo](https://claritydx.netlify.app) • [Documentation](#documentation) • [Report Bug](https://github.com/your-username/ClarityDx/issues)
+[Live Demo](https://claritydx.netlify.app) • [Documentation](#documentation) • [Report Bug](https://github.com/t-boye/ClarityDx/issues)
 
 </div>
 
@@ -140,7 +140,7 @@
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/ClarityDx.git
+git clone https://github.com/t-boye/ClarityDx.git
 cd ClarityDx
 ```
 
@@ -486,6 +486,6 @@ This system should only be used:
 
 **Made with ❤️ for better healthcare accessibility**
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/your-username/ClarityDx)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/t-boye/ClarityDx)
 
 </div>
